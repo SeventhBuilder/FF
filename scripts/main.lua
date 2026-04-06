@@ -939,7 +939,7 @@ Autofarmsection:addButton("Toggle Bird Nests AutoFarm", function()
 	end
 end)
 task.wait(.025)
-Autofarmsection:addButton("Toggle Lost AutoFarm", function()
+Autofarmsection:addButton("Toggle Lost AutoFarm(PATCHED)", function()
 	if lfarm then
 		amountEmptyInventory = 20
 		lfarm = false

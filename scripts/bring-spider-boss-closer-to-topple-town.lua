@@ -1,8 +1,10 @@
+local StarterGui = game:GetService("StarterGui")
 local player = game.Players.LocalPlayer
+
 if player:FindFirstChild("PlayerScripts") then
 	if player:FindFirstChild("PlayerScripts"):FindFirstChild("Fog") then
 		player.PlayerScripts.Fog:Destroy()
-		game.StarterGui:SetCore("SendNotification", {
+		StarterGui:SetCore("SendNotification", {
 			Title = "Bring Spider Boss";
 			Text = "Removed fog.";
 			Icon = "rbxassetid://705101397";
@@ -11,6 +13,7 @@ if player:FindFirstChild("PlayerScripts") then
 		--venyx:Notify("Bring Spider Boss","Removed fog.","rbxassetid://705101397")
 	end
 end
+
 if player.Character:FindFirstChild("Fogbox") then
 	if player.Character:FindFirstChild("Fogbox"):FindFirstChild("Ring1") then
 		player.Character.Fogbox.Ring1:Destroy()
@@ -22,6 +25,7 @@ if player.Character:FindFirstChild("Fogbox") then
 		player.Character.Fogbox.Ring3:Destroy()
 	end
 end
+
 if not game:GetService("Workspace").NPCS.BanditSpiderNPC:FindFirstChildWhichIsA("BasePart") then
 	if game.CoreGui:FindFirstChild("FF") then
 		if game.CoreGui:FindFirstChild("FF"):FindFirstChild("Main") then
@@ -30,7 +34,7 @@ if not game:GetService("Workspace").NPCS.BanditSpiderNPC:FindFirstChildWhichIsA(
 	end
 	goto(Vector3.new(1496, 73, -3738))
 	task.wait(4)
-	game.StarterGui:SetCore("SendNotification", {
+	StarterGui:SetCore("SendNotification", {
 		Title = "Bring Spider Boss";
 		Text = "Teleported to spider boss spawn area. Hub disabled until spider boss teleportation finished.";
 		Icon = "rbxassetid://705101397";
@@ -40,7 +44,7 @@ if not game:GetService("Workspace").NPCS.BanditSpiderNPC:FindFirstChildWhichIsA(
 	task.wait(1)
 	if not game:GetService("Workspace").NPCS.BanditSpiderNPC:FindFirstChildWhichIsA("BasePart") then
 		--venyx:Notify("Bring Spider Boss","No spider boss found.","rbxassetid://705101397")
-		game.StarterGui:SetCore("SendNotification", {
+		StarterGui:SetCore("SendNotification", {
 			Title = "Bring Spider Boss";
 			Text = "No spider boss found.";
 			Icon = "rbxassetid://705101397";
@@ -85,7 +89,7 @@ if not game:GetService("Workspace").NPCS.BanditSpiderNPC:FindFirstChildWhichIsA(
 			c.Position = Vector3.new(684, 226, -438)
 		end
 		task.wait(5)
-		game.StarterGui:SetCore("SendNotification", {
+		StarterGui:SetCore("SendNotification", {
 			Title = "Bring Spider Boss";
 			Text = "Teleported to spider boss current location. Hub re-enabled.";
 			Icon = "rbxassetid://705101397";
@@ -103,14 +107,14 @@ else
 	goto(game:GetService("Workspace").NPCS.BanditSpiderNPC:FindFirstChildWhichIsA("BasePart").Position + Vector3.new(30,30,30))
 	task.wait()
 	--print("Spider Boss Position"..tostring(game:GetService("Workspace").NPCS.BanditSpiderNPC:FindFirstChildWhichIsA("BasePart").Position))
-	game.StarterGui:SetCore("SendNotification", {
+	StarterGui:SetCore("SendNotification", {
 		Title = "Bring Spider Boss";
 		Text = "Teleported to spider boss current location. Hub disabled until spider boss teleportation is finished.";
 		Icon = "rbxassetid://705101397";
 		Duration = 5;
 	})
 	--venyx:Notify("Bring Spider Boss","Teleported to spider boss current location. Hub disabled until spider boss teleportation finished.","rbxassetid://705101397")
-	if game.CoreGui:FindFirstChild("FF") then
+	if CoreGui:FindFirstChild("FF") then
 		if game.CoreGui:FindFirstChild("FF"):FindFirstChild("Main") then
 			game.CoreGui:FindFirstChild("FF"):FindFirstChild("Main").Visible = true
 		end
@@ -151,7 +155,7 @@ else
 		c.Position = Vector3.new(684, 226, -438)
 	end
 	task.wait(5)
-	game.StarterGui:SetCore("SendNotification", {
+	StarterGui:SetCore("SendNotification", {
 		Title = "Bring Spider Boss";
 		Text = "Bring Spider Boss","Teleported to spider boss current location. Hub re-enabled.";
 		Icon = "rbxassetid://705101397";

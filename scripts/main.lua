@@ -36,7 +36,8 @@ getgenv().scriptRunning = true
 local noFog = false
 
 -- init
-local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/bardium/venyx/main/main"))()
+--local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/bardium/venyx/main/main"))()
+local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/Stefanuk12/Venyx-UI-Library/main/source.lua"))()
 
 local venyx = library.new("FF", 5013109572)
 function goto(pos)
@@ -498,9 +499,10 @@ Abilities:addButton("Auto Find Presents", function()
 end)
 
 Abilities:addText("Fast Regen Stamina will kill your character so store valueables in a chest.")
-Abilities:addButton("Fast Regen Stamina (Aidez)", function()
-	loadstring(game:HttpGet(('https://pastebin.com/raw/evnYjsyM')))()
+Abilities:addButton("Fast Regen Stamina", function()
+	loadstring(game:HttpGet(("https://raw.githubusercontent.com/JustApstl/FF/refs/heads/main/scripts/fast-regen-stamina.lua")))()
 end)
+
 local spawnersFolder = game:GetService("Workspace").Spawners
 for i,v in pairs (spawnersFolder:GetDescendants()) do
 	if v.Name == "PlantBoxHandleAdornment" or v.Name == "PlantBeam" then

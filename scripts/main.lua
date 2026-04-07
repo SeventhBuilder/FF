@@ -497,16 +497,16 @@ Abilities:addButton("Check For Path Gambler", function()
 end)
 
 Abilities:addButton("Faster Kills", function()
-	loadstring(game:HttpGet(("https://raw.githubusercontent.com/SeventhBuilder/FF/refs/heads/main/scripts/faster-kills.lua")))()
+	loadstring(game:HttpGet(("https://raw.githubusercontent.com/SeventhBuilder/FF/main/scripts/faster-kills.lua")))()
 end)
 
 Abilities:addButton("Auto Find Presents", function()
-	loadstring(game:HttpGet(("https://raw.githubusercontent.com/SeventhBuilder/FF/refs/heads/main/scripts/auto-find-presents.lua")))()
+	loadstring(game:HttpGet(("https://raw.githubusercontent.com/SeventhBuilder/FF/main/scripts/auto-find-presents.lua")))()
 end)
 
 Abilities:addText("Fast Regen Stamina will kill your character so store valueables in a chest.")
 Abilities:addButton("Fast Regen Stamina", function()
-	loadstring(game:HttpGet(("https://raw.githubusercontent.com/SeventhBuilder/FF/refs/heads/main/scripts/fast-regen-stamina.lua")))()
+	loadstring(game:HttpGet(("https://raw.githubusercontent.com/SeventhBuilder/FF/main/scripts/fast-regen-stamina.lua")))()
 end)
 
 local spawnersFolder = workspace.Spawners

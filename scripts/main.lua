@@ -1,15 +1,22 @@
-local descendants = game.CoreGui:GetDescendants()
+local RunService = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
+
+local Players = game:GetService("Players")
+local Lighting = game:GetService("Lighting")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local StarterGui = game:GetService("StarterGui")
+
+local descendants = CoreGui:GetDescendants()
 
 for _, descendant in pairs(descendants) do
 	if descendant.Name == "SimpleSpy2" then
 		descendant:Destroy()
-		game.Players.LocalPlayer:Kick("Unstable connection detected")
+		Players.LocalPlayer:Kick("Unstable connection detected")
 	end
 end
-local StarterGui = game:GetService("StarterGui")
 
 StarterGui:SetCore("SendNotification", {
-	Title = "Credits";
+	Title = "FF";
 	Text = "FF"
 })
 -- variables
@@ -21,16 +28,13 @@ local themes = {
 	DarkContrast = Color3.fromRGB(88, 140, 88),  
 	TextColor = Color3.fromRGB(200, 255, 200)
 }
-RunService = game:GetService("RunService")
-Lighting = game:GetService("Lighting")
-COREGUI = game:GetService("CoreGui")
-Players = game:GetService("Players")
-local speaker = game.Players.LocalPlayer
+
+local speaker = Players.LocalPlayer
 Mouse = Players.LocalPlayer:GetMouse()
-local playerChildren = game.Players:GetChildren()
-if game.CoreGui:FindFirstChild("FF") then
+local playerChildren = Players:GetChildren()
+if CoreGui:FindFirstChild("FF") then
 	getgenv().scriptRunning = false
-	game.CoreGui:FindFirstChild("FF"):Destroy()
+	CoreGui:FindFirstChild("FF"):Destroy()
 end
 getgenv().scriptRunning = true
 local noFog = false
@@ -44,39 +48,39 @@ local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/bardi
 local venyx = library.new("FF", 5013109572)
 function goto(pos)
 	local active = true
-	if not game.Workspace.HOLE:FindFirstChild("HoleTPEntrance") then
+	if not workspace.HOLE:FindFirstChild("HoleTPEntrance") then
 		repeat
-			local prevPos = game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame
-			game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(1304,96,-525)
+			local prevPos = Players.LocalPlayer.Character.HumanoidRootPart.CFrame
+			Players.LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(1304,96,-525)
 			task.wait()
-			game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = prevPos
+			Players.LocalPlayer.Character.HumanoidRootPart.CFrame = prevPos
 			task.wait(1)
-		until game.Workspace.HOLE:FindFirstChild("HoleTPEntrance")
+		until workspace.HOLE:FindFirstChild("HoleTPEntrance")
 	end
 
-	if (game.Players.LocalPlayer.Character.HumanoidRootPart.Position - pos).magnitude < 200 then
-		game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(pos)
+	if (Players.LocalPlayer.Character.HumanoidRootPart.Position - pos).magnitude < 200 then
+		Players.LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(pos)
 		task.wait(.3)
 		local active = false
 	else
-		local hole = game.Workspace.HOLE.HoleTPEntrance
+		local hole = workspace.HOLE.HoleTPEntrance
 		local oPos = hole.Position
 		local oSize = hole.Size
 
 		hole.Size = Vector3.new(1,1,1)
 		hole.Transparency = 1
-		hole.CFrame = game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame
-		repeat hole.Position = game.Players.LocalPlayer.Character.HumanoidRootPart.Position task.wait() until (hole.Position - game.Players.LocalPlayer.Character.HumanoidRootPart.Position).magnitude < 10
+		hole.CFrame = Players.LocalPlayer.Character.HumanoidRootPart.CFrame
+		repeat hole.Position = Players.LocalPlayer.Character.HumanoidRootPart.Position task.wait() until (hole.Position - Players.LocalPlayer.Character.HumanoidRootPart.Position).magnitude < 10
 		hole.Position = oPos
 		hole.Size = oSize
-		repeat task.wait() until (game.Players.LocalPlayer.Character.HumanoidRootPart.Position - Vector3.new(430,441,102)).magnitude < 10
+		repeat task.wait() until (Players.LocalPlayer.Character.HumanoidRootPart.Position - Vector3.new(430,441,102)).magnitude < 10
 		for i=1, 4 do
-			game.Players.LocalPlayer.Character.HumanoidRootPart.Anchored = true
-			game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(pos)
+			Players.LocalPlayer.Character.HumanoidRootPart.Anchored = true
+			Players.LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(pos)
 			task.wait(.1)
 		end
 		task.wait(.1)
-		game.Players.LocalPlayer.Character.HumanoidRootPart.Anchored = false
+		Players.LocalPlayer.Character.HumanoidRootPart.Anchored = false
 		local active = false
 	end
 end
@@ -379,7 +383,7 @@ end
 -- section 2
 local Abilities = MainPage:addSection("Abilities")
 local Universal = PlayerPage:addSection("Player")
-local Humanoid = game.Players.LocalPlayer.Character:FindFirstChildWhichIsA("Humanoid", true)
+local Humanoid = Players.LocalPlayer.Character:FindFirstChildWhichIsA("Humanoid", true)
 repeat task.wait(0.01) until Humanoid
 repeat task.wait(0.01) until Humanoid.WalkSpeed ~= 0
 local walkspeed = Humanoid.WalkSpeed
@@ -403,53 +407,53 @@ Abilities:addButton("Remove All Trees", function()
 		end
 	end
 end)
-local npcsFolder = game:GetService("Workspace"):FindFirstChild("NPCS")
+local npcsFolder = workspace:FindFirstChild("NPCS")
 Abilities:addButton("Get Grateful Frog", function()
-	if game:GetService("Workspace").Spawners["The Sprutle Frog Expansion_Updated"]:FindFirstChild("Spawner_GratefulFrogs") then
-		if game:GetService("Workspace").Spawners["The Sprutle Frog Expansion_Updated"]["Spawner_GratefulFrogs"]:FindFirstChild("Collectible") then
+	if workspace.Spawners["The Sprutle Frog Expansion_Updated"]:FindFirstChild("Spawner_GratefulFrogs") then
+		if workspace.Spawners["The Sprutle Frog Expansion_Updated"]["Spawner_GratefulFrogs"]:FindFirstChild("Collectible") then
 			venyx:Notify("Frog Finder","Frog found!","rbxassetid://912824766")
 			task.wait(.1)
-			if game:GetService("Workspace").Spawners["The Sprutle Frog Expansion_Updated"]["Spawner_GratefulFrogs"].Collectible:FindFirstChildWhichIsA("BasePart") then
+			if workspace.Spawners["The Sprutle Frog Expansion_Updated"]["Spawner_GratefulFrogs"].Collectible:FindFirstChildWhichIsA("BasePart") then
 				venyx:Notify("Frog Finder","Teleported to frog.","rbxassetid://912824766")
-				goto(game:GetService("Workspace").Spawners["The Sprutle Frog Expansion_Updated"]["Spawner_GratefulFrogs"].Collectible:FindFirstChildWhichIsA("BasePart").Position)
+				goto(workspace.Spawners["The Sprutle Frog Expansion_Updated"]["Spawner_GratefulFrogs"].Collectible:FindFirstChildWhichIsA("BasePart").Position)
 				task.wait(.01)
 				for p = 1, 50 do
 					task.wait()
-					game:GetService("Workspace").Spawners["The Sprutle Frog Expansion_Updated"]["Spawner_GratefulFrogs"].Collectible.InteractEvent:FireServer()
+					workspace.Spawners["The Sprutle Frog Expansion_Updated"]["Spawner_GratefulFrogs"].Collectible.InteractEvent:FireServer()
 				end
 				venyx:Notify("Frog Finder","Tried collecting frog.","rbxassetid://912824766")
 			else
 				venyx:Notify("Frog Finder","Can't teleport to frog, so character is moving around the map until it can teleport to frog. Hub disabled until frog found.","rbxassetid://912824766")
 				repeat
-					if game.CoreGui:FindFirstChild("FF") then
-						if game.CoreGui:FindFirstChild("FF"):FindFirstChild("Main") then
-							game.CoreGui:FindFirstChild("FF"):FindFirstChild("Main").Visible = false
+					if CoreGui:FindFirstChild("FF") then
+						if CoreGui:FindFirstChild("FF"):FindFirstChild("Main") then
+							CoreGui:FindFirstChild("FF"):FindFirstChild("Main").Visible = false
 						end
 					end
-					game:GetService("Workspace").Spawners["The Sprutle Frog Expansion_Updated"]["Spawner_GratefulFrogs"].SpawnLocations.SpawnBrick.Name = "lol"
-					goto(game:GetService("Workspace").Spawners["The Sprutle Frog Expansion_Updated"]["Spawner_GratefulFrogs"].SpawnLocations.SpawnBrick.Position + Vector3.new(0,10,0))
+					workspace.Spawners["The Sprutle Frog Expansion_Updated"]["Spawner_GratefulFrogs"].SpawnLocations.SpawnBrick.Name = "lol"
+					goto(workspace.Spawners["The Sprutle Frog Expansion_Updated"]["Spawner_GratefulFrogs"].SpawnLocations.SpawnBrick.Position + Vector3.new(0,10,0))
 					task.wait(.5)
-				until game:GetService("Workspace").Spawners["The Sprutle Frog Expansion_Updated"]["Spawner_GratefulFrogs"].Collectible:FindFirstChildWhichIsA("BasePart") or not game:GetService("Workspace").Spawners["The Sprutle Frog Expansion_Updated"]["Spawner_GratefulFrogs"].SpawnLocations:FindFirstChild("SpawnBrick")
-				if not game:GetService("Workspace").Spawners["The Sprutle Frog Expansion_Updated"]["Spawner_GratefulFrogs"].SpawnLocations:FindFirstChild("SpawnBrick") then
-					game.Players.LocalPlayer:Kick("Server is laggy or something glitched. It is recommended that you use this hub only in a private server.")
+				until workspace.Spawners["The Sprutle Frog Expansion_Updated"]["Spawner_GratefulFrogs"].Collectible:FindFirstChildWhichIsA("BasePart") or not workspace.Spawners["The Sprutle Frog Expansion_Updated"]["Spawner_GratefulFrogs"].SpawnLocations:FindFirstChild("SpawnBrick")
+				if not workspace.Spawners["The Sprutle Frog Expansion_Updated"]["Spawner_GratefulFrogs"].SpawnLocations:FindFirstChild("SpawnBrick") then
+					Players.LocalPlayer:Kick("Server is laggy or something glitched. It is recommended that you use this hub only in a private server.")
 				else
 					venyx:Notify("Frog Finder","Frog found!","rbxassetid://912824766")
 					task.wait(.1)
-					goto(game:GetService("Workspace").Spawners["The Sprutle Frog Expansion_Updated"]["Spawner_GratefulFrogs"].Collectible:FindFirstChildWhichIsA("BasePart").Position)
+					goto(workspace.Spawners["The Sprutle Frog Expansion_Updated"]["Spawner_GratefulFrogs"].Collectible:FindFirstChildWhichIsA("BasePart").Position)
 					venyx:Notify("Frog Finder","Teleported to frog.","rbxassetid://912824766")
 					task.wait(.01)
 					for p = 1, 50 do
 						task.wait()
-						if game:GetService("Workspace").Spawners["The Sprutle Frog Expansion_Updated"]["Spawner_GratefulFrogs"]:FindFirstChild("Collectible") then
-							if game:GetService("Workspace").Spawners["The Sprutle Frog Expansion_Updated"]["Spawner_GratefulFrogs"]:FindFirstChild("Collectible"):FindFirstChild("InteractEvent") then
-								game:GetService("Workspace").Spawners["The Sprutle Frog Expansion_Updated"]["Spawner_GratefulFrogs"].Collectible.InteractEvent:FireServer()
+						if workspace.Spawners["The Sprutle Frog Expansion_Updated"]["Spawner_GratefulFrogs"]:FindFirstChild("Collectible") then
+							if workspace.Spawners["The Sprutle Frog Expansion_Updated"]["Spawner_GratefulFrogs"]:FindFirstChild("Collectible"):FindFirstChild("InteractEvent") then
+								workspace.Spawners["The Sprutle Frog Expansion_Updated"]["Spawner_GratefulFrogs"].Collectible.InteractEvent:FireServer()
 							end
 						end
 					end
 					venyx:Notify("Frog Finder","Tried collecting frog.","rbxassetid://912824766")
-					if game.CoreGui:FindFirstChild("FF") then
-						if game.CoreGui:FindFirstChild("FF"):FindFirstChild("Main") then
-							game.CoreGui:FindFirstChild("FF"):FindFirstChild("Main").Visible = true
+					if CoreGui:FindFirstChild("FF") then
+						if CoreGui:FindFirstChild("FF"):FindFirstChild("Main") then
+							CoreGui:FindFirstChild("FF"):FindFirstChild("Main").Visible = true
 						end
 					end
 				end
@@ -493,26 +497,26 @@ Abilities:addButton("Check For Path Gambler", function()
 end)
 
 Abilities:addButton("Faster Kills", function()
-	loadstring(game:HttpGet(("https://raw.githubusercontent.com/JustApstl/FF/refs/heads/main/scripts/faster-kills.lua")))()
+	loadstring(game:HttpGet(("https://raw.githubusercontent.com/SeventhBuilder/FF/refs/heads/main/scripts/faster-kills.lua")))()
 end)
 
 Abilities:addButton("Auto Find Presents", function()
-	loadstring(game:HttpGet(("https://raw.githubusercontent.com/JustApstl/FF/refs/heads/main/scripts/auto-find-presents.lua")))()
+	loadstring(game:HttpGet(("https://raw.githubusercontent.com/SeventhBuilder/FF/refs/heads/main/scripts/auto-find-presents.lua")))()
 end)
 
 Abilities:addText("Fast Regen Stamina will kill your character so store valueables in a chest.")
 Abilities:addButton("Fast Regen Stamina", function()
-	loadstring(game:HttpGet(("https://raw.githubusercontent.com/JustApstl/FF/refs/heads/main/scripts/fast-regen-stamina.lua")))()
+	loadstring(game:HttpGet(("https://raw.githubusercontent.com/SeventhBuilder/FF/refs/heads/main/scripts/fast-regen-stamina.lua")))()
 end)
 
-local spawnersFolder = game:GetService("Workspace").Spawners
+local spawnersFolder = workspace.Spawners
 for i,v in pairs (spawnersFolder:GetDescendants()) do
 	if v.Name == "PlantBoxHandleAdornment" or v.Name == "PlantBeam" then
 		v:Destroy()
 	end
 end
 Abilities:addButton("Remove Fog", function()
-	local player = game.Players.LocalPlayer
+	local player = Players.LocalPlayer
 	if player:FindFirstChild("PlayerScripts") then
 		if player:FindFirstChild("PlayerScripts"):FindFirstChild("Fog") then
 			player.PlayerScripts.Fog:Destroy()
@@ -561,7 +565,7 @@ end)
 
 ESPs:addTextbox("Add Plant ESP Name", "Insert Plant Name Here", function(value,focusLost)
 	if focusLost and value ~= nil and value ~= "" then
-		for i,v in pairs (game:GetService("ReplicatedStorage").ItemInfo:GetDescendants()) do
+		for i,v in pairs (ReplicatedStorage.ItemInfo:GetDescendants()) do
 			if v.Name == "FullName" then
 				if not table.find(plants, tostring(v.Parent.Name)) and string.lower(v.Value) == string.lower(value) then
 					table.insert(plants, tonumber(v.Parent.Name))
@@ -587,7 +591,7 @@ end)
 
 ESPs:addTextbox("Remove Plant ESP Name", "Insert Plant Name Here", function(value,focusLost)
 	if focusLost and value ~= nil and value ~= "" then
-		for i,v in pairs (game:GetService("ReplicatedStorage").ItemInfo:GetDescendants()) do
+		for i,v in pairs (ReplicatedStorage.ItemInfo:GetDescendants()) do
 			if v.Name == "FullName" then
 				if string.lower(v.Value) == string.lower(value) then
 					--print("yes plant found")
@@ -832,24 +836,24 @@ local speakahHRP = speakahChar.HumanoidRootPart
 
 
 local ffarm = false
-local root = game.Workspace[game.Players.LocalPlayer.Name].HumanoidRootPart
+local root = workspace[Players.LocalPlayer.Name].HumanoidRootPart
 function checkTP()
-	if not game.Workspace.HOLE:FindFirstChild("HoleTPEntrance") then
+	if not workspace.HOLE:FindFirstChild("HoleTPEntrance") then
 		repeat
 			local prevPos = root.CFrame
 			root.CFrame = CFrame.new(1304,96,-525)
 			task.wait()
 			root.CFrame = prevPos
 			task.wait(1)
-		until game.Workspace.HOLE:FindFirstChild("HoleTPEntrance")
+		until workspace.HOLE:FindFirstChild("HoleTPEntrance")
 	end
 end
 checkTP()
 
 function gotofirefly(firefly)
-	local hole = game.Workspace.HOLE
+	local hole = workspace.HOLE
 	if hole:FindFirstChild("HoleTPEntrance") then
-		hole = game.Workspace.HOLE.HoleTPEntrance
+		hole = workspace.HOLE.HoleTPEntrance
 		if (root.Position - firefly.Position).magnitude < 200 then
 		else
 			hole.Size = Vector3.new(1,1,1)
@@ -947,7 +951,7 @@ Autofarmsection:addButton("Toggle Lost AutoFarm(PATCHED)", function()
 	else if not lfarm then
 			amountEmptyInventory = 20
 			venyx:Notify("Status","Hidden key is required.","rbxassetid://2452981255")
-			local invFrame = game:GetService("Players").LocalPlayer.PlayerGui.Container.Main["INV_SF"]
+			local invFrame = Players.LocalPlayer.PlayerGui.Container.Main["INV_SF"]
 			for i,v in pairs (invFrame:GetDescendants()) do
 				if v.Name == "ItemCode" then
 					if v.Value == 2025 then
@@ -1037,7 +1041,7 @@ Universal:addButton("Telekinesis", function()
 		return c
 	end
 	local g = {}
-	local h = Instance.new("Model", game:GetService("Lighting"))
+	local h = Instance.new("Model", Lighting)
 	local i = Instance.new("Tool")
 	local j = Instance.new("Part")
 	local k = Instance.new("Script")
@@ -1325,7 +1329,7 @@ Universal:addButton("Telekinesis", function()
 		)
 	)
 	for J, H in pairs(h:GetChildren()) do
-		H.Parent = game:GetService("Players").LocalPlayer.Backpack
+		H.Parent = Players.LocalPlayer.Backpack
 		pcall(
 			function()
 				H:MakeJoints()
@@ -1401,13 +1405,13 @@ end)
 
 local exitGui = SettingsPage:addSection("Exit Gui")
 exitGui:addButton("Exit Gui", function()
-	local descendants = game.CoreGui:GetDescendants()
+	local descendants = CoreGui:GetDescendants()
 
 
 	for _, descendant in pairs(descendants) do
 		if descendant.Name == "SimpleSpy2" then
 			descendant:Destroy()
-			game.Players.LocalPlayer:Kick("Unstable connection detected")
+			Players.LocalPlayer:Kick("Unstable connection detected")
 		end
 	end
 	for i,v in pairs (spawnersFolder:GetDescendants()) do
@@ -1429,8 +1433,8 @@ exitGui:addButton("Exit Gui", function()
 	speaker.Character.Humanoid.JumpPower = 81.5
 	speaker.Character.Humanoid.WalkSpeed = 18
 	getgenv().scriptRunning = false
-	if game.CoreGui:FindFirstChild("FF") then
-		game.CoreGui:FindFirstChild("FF"):Destroy()
+	if CoreGui:FindFirstChild("FF") then
+		CoreGui:FindFirstChild("FF"):Destroy()
 	end
 end)
 
@@ -1439,27 +1443,27 @@ task.wait(.1)
 
 task.wait(1)
 
-local descendants = game.CoreGui:GetDescendants()
+local descendants = CoreGui:GetDescendants()
 
 
 for _, descendant in pairs(descendants) do
 	if descendant.Name == "SimpleSpy2" then
 		descendant:Destroy()
-		game.Players.LocalPlayer:Kick("Unstable connection detected")
+		Players.LocalPlayer:Kick("Unstable connection detected")
 	end
 end
 
 function ringBell()
 	task.wait()
-	game:GetService("ReplicatedStorage").Events.Deli:FireServer("RingBell")
+	ReplicatedStorage.Events.Deli:FireServer("RingBell")
 	--print("rung bell")
-	game:GetService("Players").LocalPlayer.PlayerGui.DeliGui.BellButton.Visible = false
+	Players.LocalPlayer.PlayerGui.DeliGui.BellButton.Visible = false
 	task.wait()	
 end
 function hideNotifications()
 	task.wait()
-	if game:GetService("Players").LocalPlayer.PlayerGui.Notification.Enabled == true then
-		game:GetService("Players").LocalPlayer.PlayerGui.Notification.Enabled = false
+	if Players.LocalPlayer.PlayerGui.Notification.Enabled == true then
+		Players.LocalPlayer.PlayerGui.Notification.Enabled = false
 	end
 	task.wait()
 end
@@ -1470,8 +1474,8 @@ function sitAtDeliBooth()
 end
 function hideDialogs()
 	task.wait()
-	if game:GetService("Players").LocalPlayer.PlayerGui.Dialog.Main.Visible == true then
-		game:GetService("Players").LocalPlayer.PlayerGui.Dialog.Main.Visible = false
+	if Players.LocalPlayer.PlayerGui.Dialog.Main.Visible == true then
+		Players.LocalPlayer.PlayerGui.Dialog.Main.Visible = false
 	end
 	task.wait()
 end
@@ -1482,50 +1486,50 @@ function skipInitialDeliDialog()
 end
 
 function sellLostItems()
-	game:GetService("ReplicatedStorage").Events.SellShop:FireServer(982,workspace.Shops.Sellers,1) -- Bag of Gems
-	game:GetService("ReplicatedStorage").Events.SellShop:FireServer(2223,workspace.Shops.Sellers,1) -- Bedrock Helmet
-	game:GetService("ReplicatedStorage").Events.SellShop:FireServer(2224,workspace.Shops.Sellers,1) -- Bedrock Chestplate
-	game:GetService("ReplicatedStorage").Events.SellShop:FireServer(2225,workspace.Shops.Sellers,1) -- Bedrock Leggings
-	game:GetService("ReplicatedStorage").Events.SellShop:FireServer(2276,workspace.Shops.Sellers,1) -- Black Antlers
-	game:GetService("ReplicatedStorage").Events.SellShop:FireServer(2228,workspace.Shops.Sellers,1) -- Century Cube
-	game:GetService("ReplicatedStorage").Events.SellShop:FireServer(2229,workspace.Shops.Sellers,1) -- Clever Cube
-	game:GetService("ReplicatedStorage").Events.SellShop:FireServer(825,workspace.Shops.Sellers,1) -- Clock
-	game:GetService("ReplicatedStorage").Events.SellShop:FireServer(2233,workspace.Shops.Sellers,1) -- Criminal's Tallhat 
-	game:GetService("ReplicatedStorage").Events.SellShop:FireServer(2239,workspace.Shops.Sellers,1) -- Fire Hood
-	game:GetService("ReplicatedStorage").Events.SellShop:FireServer(2240,workspace.Shops.Sellers,1) -- Fire Spellbound Mage Skirt
-	game:GetService("ReplicatedStorage").Events.SellShop:FireServer(2241,workspace.Shops.Sellers,1) -- Fire Spellbound Mage Top
-	game:GetService("ReplicatedStorage").Events.SellShop:FireServer(2280,workspace.Shops.Sellers,1) -- Gold Antlers
-	game:GetService("ReplicatedStorage").Events.SellShop:FireServer(2246,workspace.Shops.Sellers,1) -- Kitchen Cube
-	game:GetService("ReplicatedStorage").Events.SellShop:FireServer(2247,workspace.Shops.Sellers,1) -- Maskhat
-	game:GetService("ReplicatedStorage").Events.SellShop:FireServer(2249,workspace.Shops.Sellers,1) -- Nightmare Boots
-	game:GetService("ReplicatedStorage").Events.SellShop:FireServer(2250,workspace.Shops.Sellers,1) -- Nightmare Prowler Hat
-	game:GetService("ReplicatedStorage").Events.SellShop:FireServer(2251,workspace.Shops.Sellers,1) -- Nightmare Prowler Legs
-	game:GetService("ReplicatedStorage").Events.SellShop:FireServer(2252,workspace.Shops.Sellers,1) -- Nightmare Prowler Torso
-	game:GetService("ReplicatedStorage").Events.SellShop:FireServer(2254,workspace.Shops.Sellers,1) -- Otherworld Boots
-	game:GetService("ReplicatedStorage").Events.SellShop:FireServer(2256,workspace.Shops.Sellers,1) -- Pantry Leech Torso
-	game:GetService("ReplicatedStorage").Events.SellShop:FireServer(2257,workspace.Shops.Sellers,1) -- Pantry Leech Platelegs
-	game:GetService("ReplicatedStorage").Events.SellShop:FireServer(2258,workspace.Shops.Sellers,1) -- Propaganda Head
-	game:GetService("ReplicatedStorage").Events.SellShop:FireServer(203,workspace.Shops.Sellers,1) -- Pureblood Dagger
-	game:GetService("ReplicatedStorage").Events.SellShop:FireServer(2260,workspace.Shops.Sellers,1) -- Rising Dark Robe Bottoms
-	game:GetService("ReplicatedStorage").Events.SellShop:FireServer(2261,workspace.Shops.Sellers,1) -- Rising Dark Robe Top
-	game:GetService("ReplicatedStorage").Events.SellShop:FireServer(2262,workspace.Shops.Sellers,1) -- Rising Dark Mask
-	game:GetService("ReplicatedStorage").Events.SellShop:FireServer(1435,workspace.Shops.Sellers,1) -- Black Salamander Egg
-	game:GetService("ReplicatedStorage").Events.SellShop:FireServer(205,workspace.Shops.Sellers,1) -- Tri-Blade Shifter
-	game:GetService("ReplicatedStorage").Events.SellShop:FireServer(407,workspace.Shops.Sellers,1) -- Wicked Junk Spellbook
+	ReplicatedStorage.Events.SellShop:FireServer(982,workspace.Shops.Sellers,1) -- Bag of Gems
+	ReplicatedStorage.Events.SellShop:FireServer(2223,workspace.Shops.Sellers,1) -- Bedrock Helmet
+	ReplicatedStorage.Events.SellShop:FireServer(2224,workspace.Shops.Sellers,1) -- Bedrock Chestplate
+	ReplicatedStorage.Events.SellShop:FireServer(2225,workspace.Shops.Sellers,1) -- Bedrock Leggings
+	ReplicatedStorage.Events.SellShop:FireServer(2276,workspace.Shops.Sellers,1) -- Black Antlers
+	ReplicatedStorage.Events.SellShop:FireServer(2228,workspace.Shops.Sellers,1) -- Century Cube
+	ReplicatedStorage.Events.SellShop:FireServer(2229,workspace.Shops.Sellers,1) -- Clever Cube
+	ReplicatedStorage.Events.SellShop:FireServer(825,workspace.Shops.Sellers,1) -- Clock
+	ReplicatedStorage.Events.SellShop:FireServer(2233,workspace.Shops.Sellers,1) -- Criminal's Tallhat 
+	ReplicatedStorage.Events.SellShop:FireServer(2239,workspace.Shops.Sellers,1) -- Fire Hood
+	ReplicatedStorage.Events.SellShop:FireServer(2240,workspace.Shops.Sellers,1) -- Fire Spellbound Mage Skirt
+	ReplicatedStorage.Events.SellShop:FireServer(2241,workspace.Shops.Sellers,1) -- Fire Spellbound Mage Top
+	ReplicatedStorage.Events.SellShop:FireServer(2280,workspace.Shops.Sellers,1) -- Gold Antlers
+	ReplicatedStorage.Events.SellShop:FireServer(2246,workspace.Shops.Sellers,1) -- Kitchen Cube
+	ReplicatedStorage.Events.SellShop:FireServer(2247,workspace.Shops.Sellers,1) -- Maskhat
+	ReplicatedStorage.Events.SellShop:FireServer(2249,workspace.Shops.Sellers,1) -- Nightmare Boots
+	ReplicatedStorage.Events.SellShop:FireServer(2250,workspace.Shops.Sellers,1) -- Nightmare Prowler Hat
+	ReplicatedStorage.Events.SellShop:FireServer(2251,workspace.Shops.Sellers,1) -- Nightmare Prowler Legs
+	ReplicatedStorage.Events.SellShop:FireServer(2252,workspace.Shops.Sellers,1) -- Nightmare Prowler Torso
+	ReplicatedStorage.Events.SellShop:FireServer(2254,workspace.Shops.Sellers,1) -- Otherworld Boots
+	ReplicatedStorage.Events.SellShop:FireServer(2256,workspace.Shops.Sellers,1) -- Pantry Leech Torso
+	ReplicatedStorage.Events.SellShop:FireServer(2257,workspace.Shops.Sellers,1) -- Pantry Leech Platelegs
+	ReplicatedStorage.Events.SellShop:FireServer(2258,workspace.Shops.Sellers,1) -- Propaganda Head
+	ReplicatedStorage.Events.SellShop:FireServer(203,workspace.Shops.Sellers,1) -- Pureblood Dagger
+	ReplicatedStorage.Events.SellShop:FireServer(2260,workspace.Shops.Sellers,1) -- Rising Dark Robe Bottoms
+	ReplicatedStorage.Events.SellShop:FireServer(2261,workspace.Shops.Sellers,1) -- Rising Dark Robe Top
+	ReplicatedStorage.Events.SellShop:FireServer(2262,workspace.Shops.Sellers,1) -- Rising Dark Mask
+	ReplicatedStorage.Events.SellShop:FireServer(1435,workspace.Shops.Sellers,1) -- Black Salamander Egg
+	ReplicatedStorage.Events.SellShop:FireServer(205,workspace.Shops.Sellers,1) -- Tri-Blade Shifter
+	ReplicatedStorage.Events.SellShop:FireServer(407,workspace.Shops.Sellers,1) -- Wicked Junk Spellbook
 end
 
 repeat task.wait(0.01) until workspace:FindFirstChild("Shops")
 local ShopsPage = venyx:addPage("Shops")
 
-for _, shop in pairs(game:GetService("Workspace").Shops:GetChildren()) do
+for _, shop in pairs(workspace.Shops:GetChildren()) do
 	if shop:FindFirstChild("Slots") then
 		task.wait(1)
 		local shopSection = ShopsPage:addSection(shop.Name)
 		
 		shopSection:addButton("Load Items", function()
-			if game.CoreGui:FindFirstChild("FF") then
-				if game.CoreGui:FindFirstChild("FF"):FindFirstChild("Main") then
-					local main = game.CoreGui:FindFirstChild("FF"):FindFirstChild("Main")
+			if CoreGui:FindFirstChild("FF") then
+				if CoreGui:FindFirstChild("FF"):FindFirstChild("Main") then
+					local main = CoreGui:FindFirstChild("FF"):FindFirstChild("Main")
 					if main:FindFirstChild("Shops") then
 						local shopsGui = main:FindFirstChild("Shops")
 
@@ -1543,7 +1547,7 @@ for _, shop in pairs(game:GetService("Workspace").Shops:GetChildren()) do
 			end
 			task.wait(0.1)
 			for _, slot in pairs(shop:FindFirstChild("Slots"):GetChildren()) do
-				for _, item in pairs(game:GetService("ReplicatedStorage").ItemInfo:GetChildren()) do
+				for _, item in pairs(ReplicatedStorage.ItemInfo:GetChildren()) do
 					if tonumber(item.Name) == tonumber(slot.Item.Value) then
 						task.wait(0.01)
 						shopSection:addText("Item Name: "..item.FullName.Value.." || Price: "..slot.Price.Value)
@@ -1563,7 +1567,7 @@ venyx:SelectPage(venyx.pages[3], true)
 task.spawn(function()
 	while getgenv().scriptRunning == true do
 		task.wait()
-		local speakerHum2 = game.Players.LocalPlayer.Character:FindFirstChildWhichIsA("Humanoid")
+		local speakerHum2 = Players.LocalPlayer.Character:FindFirstChildWhichIsA("Humanoid")
 		if speakerHum2 then
 			task.wait()
 			speakerHum2.MaxSlopeAngle = sangle
@@ -1576,7 +1580,7 @@ task.spawn(function()
 			task.wait()
 			--print("firefly farming")
 			--print("firefly farming")
-			local fly = game.Workspace.Fireflies:FindFirstChild("FireflyServer")
+			local fly = workspace.Fireflies:FindFirstChild("FireflyServer")
 			if fly and ffarm then
 				gotofirefly(fly)
 			end
@@ -1618,21 +1622,21 @@ task.spawn(function()
 		if bfarm then
 			task.wait()
 			--print("bird nest farming")
-			if game:GetService("Workspace").Spawners.Island:FindFirstChild("Spawner_BirdsNest") then
-				if game:GetService("Workspace").Spawners.Island:FindFirstChild("Spawner_BirdsNest"):FindFirstChild("Collectible") then
+			if workspace.Spawners.Island:FindFirstChild("Spawner_BirdsNest") then
+				if workspace.Spawners.Island:FindFirstChild("Spawner_BirdsNest"):FindFirstChild("Collectible") then
 					venyx:Notify("Bird Nests AutoFarm","Nest found!","rbxassetid://3069123676")
-					if game:GetService("Workspace").Spawners.Island:FindFirstChild("Spawner_BirdsNest").Collectible:FindFirstChildWhichIsA("BasePart") then
+					if workspace.Spawners.Island:FindFirstChild("Spawner_BirdsNest").Collectible:FindFirstChildWhichIsA("BasePart") then
 						venyx:Notify("Bird Nests AutoFarm","Teleported to nest.","rbxassetid://3069123676")
-						goto(game:GetService("Workspace").Spawners.Island:FindFirstChild("Spawner_BirdsNest").Collectible:FindFirstChildWhichIsA("BasePart").Position)
+						goto(workspace.Spawners.Island:FindFirstChild("Spawner_BirdsNest").Collectible:FindFirstChildWhichIsA("BasePart").Position)
 						task.wait(.05)
-						game:GetService("Workspace").Spawners.Island:FindFirstChild("Spawner_BirdsNest").Collectible.InteractEvent:FireServer()
+						workspace.Spawners.Island:FindFirstChild("Spawner_BirdsNest").Collectible.InteractEvent:FireServer()
 						venyx:Notify("Bird Nests AutoFarm","Tried collecting nest.","rbxassetid://3069123676")
 						for i = 0, 50, 1 do
 							local args = {
 								[1] = i
 							}
 
-							game:GetService("ReplicatedStorage").Events.OpenSlot:FireServer(unpack(args))
+							ReplicatedStorage.Events.OpenSlot:FireServer(unpack(args))
 						end
 						task.wait(3)
 					else
@@ -1642,10 +1646,10 @@ task.spawn(function()
 								[1] = i
 							}
 
-							game:GetService("ReplicatedStorage").Events.OpenSlot:FireServer(unpack(args))
+							ReplicatedStorage.Events.OpenSlot:FireServer(unpack(args))
 						end
-						game:GetService("Workspace").Spawners.Island:FindFirstChild("Spawner_BirdsNest").SpawnLocations.SpawnBrick.Name = "lol"
-						goto(game:GetService("Workspace").Spawners.Island:FindFirstChild("Spawner_BirdsNest").SpawnLocations.SpawnBrick.Position + Vector3.new(0,10,0))
+						workspace.Spawners.Island:FindFirstChild("Spawner_BirdsNest").SpawnLocations.SpawnBrick.Name = "lol"
+						goto(workspace.Spawners.Island:FindFirstChild("Spawner_BirdsNest").SpawnLocations.SpawnBrick.Position + Vector3.new(0,10,0))
 						task.wait(3)
 					end
 				else
@@ -1684,10 +1688,10 @@ task.spawn(function()
 			workspace.Guttermouth.GuttermouthRoom4.ClaimRewards:InvokeServer(true)
 			task.wait(0.5)
 			if workspace:FindFirstChild("GuttermouthChest") then
-				game:GetService("Workspace").GuttermouthChest:Destroy()
+				workspace.GuttermouthChest:Destroy()
 			end
 			goto(Vector3.new(12529, 252, -2350))
-			local invFrame = game:GetService("Players").LocalPlayer.PlayerGui.Container.Main["INV_SF"]
+			local invFrame = Players.LocalPlayer.PlayerGui.Container.Main["INV_SF"]
 			for i,v in pairs (invFrame:GetDescendants()) do
 				if v.Name == "HoverText" then
 					if v.Value ~= "" then
@@ -1751,7 +1755,7 @@ task.spawn(function()
 									plantBeam.Width1 = 0.1
 									local characterAttachment = Instance.new("Attachment")
 									local plantAttachment = Instance.new("Attachment")
-									characterAttachment.Parent = game.Players.LocalPlayer.Character:WaitForChild("HumanoidRootPart")
+									characterAttachment.Parent = Players.LocalPlayer.Character:WaitForChild("HumanoidRootPart")
 									plantAttachment.Parent = plantModel:FindFirstChild("HitBox")
 									plantBeam.Parent = plantModel:FindFirstChild("HitBox")
 									plantBeam.Attachment0 = characterAttachment

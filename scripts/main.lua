@@ -374,7 +374,7 @@ end)
 local theme = SettingsPage
 local colors = SettingsPage:addSection("Hub Colors")
 
-for theme, color in pairs(themes) do -- all in one theme changer, i know, Denosaur's cool
+for theme, color in pairs(themes) do -- all in one theme changer
 	colors:addColorPicker(theme, color, function(color3)
 		venyx:setTheme(theme, color3)
 	end)

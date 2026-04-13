@@ -13,7 +13,7 @@ for _, descendant in pairs(CoreGui:GetDescendants()) do
 	end
 end
 
-StarterGui:SetCore("SendNotification", {Title = "FF", Text = "Loaded with Rayfield UI"})
+StarterGui:SetCore("SendNotification", {Title = "FF Hub", Text = "by SeventhBuilder"})
 
 getgenv().scriptRunning = true
 
@@ -118,7 +118,7 @@ local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 local Window = Rayfield:CreateWindow({
 	Name = "FF Hub",
 	LoadingTitle = "FF Hub",
-	LoadingSubtitle = "by SeventhBuilder • FULL FIXED VERSION",
+	LoadingSubtitle = "by SeventhBuilder",
 	Theme = "Default",
 	ConfigurationSaving = {Enabled = false}
 })

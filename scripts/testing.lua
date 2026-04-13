@@ -1,6 +1,6 @@
 -- ============================================================
---  FF Hub - Improved Combined Version
---  Original by SeventhBuilder | Improved & Merged
+--  FF Hub
+--  Original by SeventhBuilder
 -- ============================================================
 
 local RunService = game:GetService("RunService")
@@ -668,9 +668,10 @@ AutoFarmTab:CreateToggle({
 	end
 })
 
+-- Lost is patched currently - will look for alternative soon
 AutoFarmTab:CreateSection("The Lost (Requires Hidden Key)")
 AutoFarmTab:CreateToggle({
-	Name = "Lost AutoFarm",
+	Name = "Lost AutoFarm(PATCHED)",
 	CurrentValue = false,
 	Flag = "LostFarm",
 	Callback = function(v)
@@ -1206,9 +1207,3 @@ task.spawn(function()
 		end
 	end
 end)
-
-Rayfield:Notify({
-	Title   = "FF Hub",
-	Content = "✅ All features loaded!\nPresent Finder is active.",
-	Duration = 6
-})

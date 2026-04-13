@@ -566,7 +566,7 @@ FeaturesTab:CreateButton({Name = "Remove All Trees", Callback = function()
 end})
 
 FeaturesTab:CreateButton({Name = "Remove All Vegetation ", Callback = function()
-	local vegetations = {"GrassyRootSystemPart", "BushLeafPart", "LilyPadPart", "FlowerPart", "BushPart", "CropPartSQ", "GrassPart", "TallGrassPartSmall", "DeadShrubPart", "PlantPart", "Trunk", "Root", "Leaves", "LeafPart"}
+	local vegetations = {"GrassyRootSystemPart", "BushLeafPart", "LilyPadPart", "FlowerPart", "BushPart", "CropPartSQ", "GrassPart", "TallGrassPartSmall", "DeadShrubPart", "PlantPart", "Trunk", "Root", "Leaves", "LeafPart", "WeedPart"}
 	for _, obj in pairs(Workspace:GetDescendants()) do
 		for _, name in pairs(vegetations) do
 			-- if obj.Parent:IsA("Model") and obj.Parent.Name == "Model" then

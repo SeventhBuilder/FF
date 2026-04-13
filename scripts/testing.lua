@@ -566,7 +566,7 @@ FeaturesTab:CreateButton({Name = "Remove All Trees", Callback = function()
 end})
 
 FeaturesTab:CreateButton({Name = "Remove All Vegetation ", Callback = function()
-	local vegetations = {"GrassyRootSystemPart", "BushLeafPart", "LilyPadPart"}
+	local vegetations = {"GrassyRootSystemPart", "BushLeafPart", "LilyPadPart", "FlowerPart", "BushPart", "CropPartSQ", "GrassPart"}
 	for _, i in pairs(Workspace:GetDescendants()) do
 		if vegetations[i.Name] then 
 			i:Destroy()

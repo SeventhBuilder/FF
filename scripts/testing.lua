@@ -1,3 +1,8 @@
+-- ============================================================
+--  FF Hub - Improved Combined Version
+--  Original by SeventhBuilder | Improved & Merged
+-- ============================================================
+
 local RunService = game:GetService("RunService")
 local CoreGui = game:GetService("CoreGui")
 local Players = game:GetService("Players")
@@ -13,24 +18,27 @@ for _, descendant in pairs(CoreGui:GetDescendants()) do
 	end
 end
 
-StarterGui:SetCore("SendNotification", {Title = "FF Hub", Text = "by SeventhBuilder"})
-
+-- Destroy previous instance if re-running
+if CoreGui:FindFirstChild("RayfieldLibrary") then
+	CoreGui:FindFirstChild("RayfieldLibrary"):Destroy()
+end
+getgenv().scriptRunning = false
+task.wait(0.1)
 getgenv().scriptRunning = true
 
 local speaker = Players.LocalPlayer
 local Mouse = speaker:GetMouse()
 
+-- ===================== STATE VARIABLES =====================
+-- Movement
 local walkspeed = 18
 local jumppower = 81.5
 local gravity = Workspace.Gravity
 local sangle = 56
 local flyspeed = 1
+local iyflyspeed = flyspeed
 
-local pESP = false
-local plants = {}
-local plantNames = {}
-local loweredPlantNames = {}
-
+-- Farm flags
 local ffarm = false
 local bfarm = false
 local dfarm = false
@@ -40,79 +48,275 @@ local shortwait = false
 local randomboth = true
 local amountEmptyInventory = 20
 
+-- Notification toggles (per-feature)
+local notif = {
+	present  = true,
+	frog     = true,
+	cosmic   = true,
+	gambler  = true,
+	firefly  = true,
+	birdnest = true,
+}
+
+-- ESP
+local pESP = false
+local plants = {}
+local plantNames = {}
+local loweredPlantNames = {}
+
+-- Noclip / Fly
 local Clip = false
 local Noclipping = nil
-
 local FLYING = false
-local iyflyspeed = flyspeed
+local flyKeyDown, flyKeyUp
 
--- ===================== IMPROVED GOTO =====================
+-- ===================== GOTO =====================
 local function goto(pos)
 	repeat task.wait() until speaker.Character and speaker.Character:FindFirstChild("HumanoidRootPart")
 	if not Workspace.HOLE:FindFirstChild("HoleTPEntrance") then
 		repeat
-			local prevPos = speaker.Character.HumanoidRootPart.CFrame
+			local prev = speaker.Character.HumanoidRootPart.CFrame
 			speaker.Character.HumanoidRootPart.CFrame = CFrame.new(1304,96,-525)
 			task.wait()
-			speaker.Character.HumanoidRootPart.CFrame = prevPos
+			speaker.Character.HumanoidRootPart.CFrame = prev
 			task.wait(1)
 		until Workspace.HOLE:FindFirstChild("HoleTPEntrance")
 	end
 
-	if (speaker.Character.HumanoidRootPart.Position - pos).Magnitude < 200 then
-		speaker.Character.HumanoidRootPart.CFrame = CFrame.new(pos)
+	local hrp = speaker.Character.HumanoidRootPart
+	if (hrp.Position - pos).Magnitude < 200 then
+		hrp.CFrame = CFrame.new(pos)
 		task.wait(0.3)
 	else
 		local hole = Workspace.HOLE.HoleTPEntrance
 		local oPos, oSize = hole.Position, hole.Size
 		hole.Size = Vector3.new(1,1,1)
 		hole.Transparency = 1
-		hole.CFrame = speaker.Character.HumanoidRootPart.CFrame
-		repeat hole.Position = speaker.Character.HumanoidRootPart.Position task.wait() until (hole.Position - speaker.Character.HumanoidRootPart.Position).Magnitude < 10
+		hole.CFrame = hrp.CFrame
+		repeat hole.Position = hrp.Position task.wait() until (hole.Position - hrp.Position).Magnitude < 10
 		hole.Position = oPos
 		hole.Size = oSize
-		repeat task.wait() until (speaker.Character.HumanoidRootPart.Position - Vector3.new(430,441,102)).Magnitude < 10
-		for i=1,4 do
-			speaker.Character.HumanoidRootPart.Anchored = true
-			speaker.Character.HumanoidRootPart.CFrame = CFrame.new(pos)
+		repeat task.wait() until (hrp.Position - Vector3.new(430,441,102)).Magnitude < 10
+		for i = 1, 4 do
+			hrp.Anchored = true
+			hrp.CFrame = CFrame.new(pos)
 			task.wait(0.1)
 		end
-		speaker.Character.HumanoidRootPart.Anchored = false
+		hrp.Anchored = false
 	end
 end
 
+local function checkTP()
+	if not Workspace.HOLE:FindFirstChild("HoleTPEntrance") then
+		repeat
+			local prev = speaker.Character.HumanoidRootPart.CFrame
+			speaker.Character.HumanoidRootPart.CFrame = CFrame.new(1304,96,-525)
+			task.wait()
+			speaker.Character.HumanoidRootPart.CFrame = prev
+			task.wait(1)
+		until Workspace.HOLE:FindFirstChild("HoleTPEntrance")
+	end
+end
+
+-- ===================== GOTO FIREFLY =====================
 local function gotofirefly(firefly)
+	local hrp = speaker.Character and speaker.Character:FindFirstChild("HumanoidRootPart")
+	if not hrp then return end
+
+	checkTP()
 	local hole = Workspace.HOLE.HoleTPEntrance
-	if (speaker.Character.HumanoidRootPart.Position - firefly.Position).Magnitude >= 200 then
+
+	if (hrp.Position - firefly.Position).Magnitude >= 200 then
 		hole.Size = Vector3.new(1,1,1)
 		hole.Transparency = 1
-		hole.CFrame = speaker.Character.HumanoidRootPart.CFrame
-		repeat hole.Position = speaker.Character.HumanoidRootPart.Position task.wait() until (hole.Position - speaker.Character.HumanoidRootPart.Position).Magnitude < 10
+		hole.CFrame = hrp.CFrame
+		repeat hole.Position = hrp.Position task.wait() until (hole.Position - hrp.Position).Magnitude < 10
 		hole.Position = Vector3.new(1318,85,-527)
 		hole.Size = Vector3.new(14,5,17)
-		repeat task.wait() until (speaker.Character.HumanoidRootPart.Position - Vector3.new(430,441,102)).Magnitude < 10
-		for i=1,5 do
-			speaker.Character.HumanoidRootPart.Anchored = true
-			speaker.Character.HumanoidRootPart.CFrame = firefly.CFrame + Vector3.new(0,3,0)
+		repeat task.wait() until (hrp.Position - Vector3.new(430,441,102)).Magnitude < 10
+		for i = 1, 5 do
+			hrp.Anchored = true
+			hrp.CFrame = firefly.CFrame + Vector3.new(0,3,0)
 			task.wait(0.1)
 		end
 	end
+
 	task.wait()
 	if firefly.Parent then
 		repeat
-			if not ffarm then return end
-			speaker.Character.HumanoidRootPart.Anchored = true
-			speaker.Character.HumanoidRootPart.CFrame = firefly.CFrame + Vector3.new(0,3,0)
-			speaker.Character.HumanoidRootPart.Anchored = false
+			if not ffarm then break end
+			hrp = speaker.Character and speaker.Character:FindFirstChild("HumanoidRootPart")
+			if not hrp then break end
+			hrp.Anchored = true
+			hrp.CFrame = firefly.CFrame + Vector3.new(0,3,0)
+			hrp.Anchored = false
 			task.wait()
-			if firefly:FindFirstChild("CollectEvent") then firefly.CollectEvent:FireServer() end
+			if firefly:FindFirstChild("CollectEvent") then
+				firefly.CollectEvent:FireServer()
+			end
 			task.wait(0.08)
 		until firefly.Parent == nil
 	end
-	speaker.Character.HumanoidRootPart.Anchored = false
+
+	if hrp then hrp.Anchored = false end
 end
 
--- ===================== RAYFIELD =====================
+-- ===================== DELI HELPERS =====================
+local function ringBell()
+	pcall(function()
+		ReplicatedStorage.Events.Deli:FireServer("RingBell")
+		Players.LocalPlayer.PlayerGui.DeliGui.BellButton.Visible = false
+	end)
+	task.wait()
+end
+
+local function hideNotifications()
+	pcall(function()
+		if Players.LocalPlayer.PlayerGui.Notification.Enabled then
+			Players.LocalPlayer.PlayerGui.Notification.Enabled = false
+		end
+	end)
+	task.wait()
+end
+
+local function sitAtDeliBooth()
+	pcall(function() Workspace.Deli.Booth1.InteractEvent:FireServer() end)
+	task.wait()
+end
+
+local function hideDialogs()
+	pcall(function()
+		if Players.LocalPlayer.PlayerGui.Dialog.Main.Visible then
+			Players.LocalPlayer.PlayerGui.Dialog.Main.Visible = false
+		end
+	end)
+	task.wait()
+end
+
+local function skipInitialDeliDialog()
+	pcall(function()
+		Workspace.Deli.Booth1.WaiterLocation.Dialog2.D.D1.D1.E.RE1:FireServer()
+	end)
+	task.wait()
+end
+
+-- ===================== SELL LOST ITEMS =====================
+local LOST_ITEM_IDS = {
+	982,2223,2224,2225,2276,2228,2229,825,2233,2239,2240,2241,
+	2280,2246,2247,2249,2250,2251,2252,2254,2256,2257,2258,203,
+	2260,2261,2262,1435,205,407
+}
+
+local function sellLostItems()
+	for _, id in pairs(LOST_ITEM_IDS) do
+		pcall(function()
+			ReplicatedStorage.Events.SellShop:FireServer(id, Workspace.Shops.Sellers, 1)
+		end)
+	end
+end
+
+-- ===================== TELEPORT TABLES =====================
+local OVERWORLD_TP = {
+	["A Frontier Of Dragons"]      = Vector3.new(1184,91,-2823),
+	["Abandoned Orchard"]          = Vector3.new(271,88,-1840),
+	["Ancient Forest"]             = Vector3.new(676,236,-1246),
+	["Blackrock Mountain"]         = Vector3.new(-594,140,-612),
+	["Blue Ogre Camp"]             = Vector3.new(-865,57,-1546),
+	["Celestial Field"]            = Vector3.new(1534,92,-2899),
+	["Celestial Peak"]             = Vector3.new(1473,195,-2483),
+	["Clamstack Cave"]             = Vector3.new(565,158,-952),
+	["Coral Bay"]                  = Vector3.new(1867,1,-2765),
+	["Farm Fortress"]              = Vector3.new(166,53,415),
+	["Frigid Waste (PvP)"]         = Vector3.new(-1737,155,-785),
+	["Gnome Magic School"]         = Vector3.new(789,240,-574),
+	["Great Pine Forest"]          = Vector3.new(-13,73,-1274),
+	["Greenhorn Grove"]            = Vector3.new(296,73,-217),
+	["Hoodlum Falls"]              = Vector3.new(1777,61,-997),
+	["Matumada"]                   = Vector3.new(-978,1,-2486),
+	["Otherworld Tower"]           = Vector3.new(1178,86,-3352),
+	["Pebble Bay"]                 = Vector3.new(-44,2,719),
+	["Petrified Grassland"]        = Vector3.new(1655,73,-1331),
+	["Pit Depths"]                 = Vector3.new(1183,-59,-2080),
+	["Rabbit Hole"]                = Vector3.new(-3233,245,-2623),
+	["Red Ant Cove"]               = Vector3.new(886,63,362),
+	["Rubble Spring"]              = Vector3.new(1062,73,-534),
+	["Starry Point"]               = Vector3.new(2265,5,481),
+	["Strangeman's Domain"]        = Vector3.new(-4778,267,732),
+	["The Deep Forest"]            = Vector3.new(1585,73,112),
+	["The Forgotten Lands"]        = Vector3.new(-779,92,-1200),
+	["The Long Coast"]             = Vector3.new(-1172,3,-1303),
+	["The Maze Wood"]              = Vector3.new(692,89,-2388),
+	["The Pits"]                   = Vector3.new(1320,89,-2430),
+	["The Quiet Field"]            = Vector3.new(2013,111,-447),
+	["The Rolling Road"]           = Vector3.new(1731,92,-2404),
+	["The Spider's Nest"]          = Vector3.new(1500,209,-3701),
+	["The Town of Right and Wrong"]= Vector3.new(1115,92,-3134),
+	["Topple Hill"]                = Vector3.new(777,199,-312),
+	["Topple Lake"]                = Vector3.new(615,256,-757),
+	["Topple Town"]                = Vector3.new(685,226,-461),
+	["Twinkling Meadow"]           = Vector3.new(92,73,-752),
+	["Upper Island"]               = Vector3.new(-1361,35,-2278),
+}
+
+local RATBOY_TP = {
+	["Back of The Theatre"]   = Vector3.new(7799,172,-3629),
+	["Blue Button"]           = Vector3.new(7285,172,-2549),
+	["Blue Door"]             = Vector3.new(7149,169,-1621),
+	["Cyan (Teal) Button"]    = Vector3.new(7203,244,2235),
+	["Cyan (Teal) Door"]      = Vector3.new(7794,204,2212),
+	["End of the Road"]       = Vector3.new(10779,375,-12512),
+	["Fish Hall"]             = Vector3.new(12905,205,5036),
+	["Green Button"]          = Vector3.new(7926,157,-3546),
+	["Green Door"]            = Vector3.new(7298,171,-2543),
+	["Inside"]                = Vector3.new(7311,171,-2558),
+	["Maze of the Root"]      = Vector3.new(13132,191,7532),
+	["Meeting Place"]         = Vector3.new(7514,237,-4952),
+	["MYSTERY STORE"]         = Vector3.new(6765,200,-2545),
+	["Orange Button"]         = Vector3.new(7129,143,-1587),
+	["Orange Door"]           = Vector3.new(6985,141,-1635),
+	["Pink Button"]           = Vector3.new(7208,154,-1717),
+	["Pink Door"]             = Vector3.new(7163,168,-1742),
+	["Purple Button"]         = Vector3.new(7297,147,-1701),
+	["Purple Door"]           = Vector3.new(7021,141,-1689),
+	["Red Button"]            = Vector3.new(7261,200,-2147),
+	["Red Door"]              = Vector3.new(7229,168,-814),
+	["The Back Area"]         = Vector3.new(7206,244,2122),
+	["The Ballroom"]          = Vector3.new(11825,318,2432),
+	["The Deli"]              = Vector3.new(7070,140,-1621),
+	["The Grand Hall"]        = Vector3.new(5928,211,4845),
+	["The Hidden Library"]    = Vector3.new(8170,187,-949),
+	["The Library of Riddles"]= Vector3.new(7332,157,-1636),
+	["The Lost"]              = Vector3.new(5858,157,4904),
+	["The Mansion"]           = Vector3.new(7003,140,-1639),
+	["The Old Cave"]          = Vector3.new(13099,174,6944),
+	["The Old Mansion"]       = Vector3.new(7242,168,-2114),
+	["The Plant Room"]        = Vector3.new(7066,159,-855),
+	["The Road"]              = Vector3.new(10759,201,8595),
+	["The Supermarket"]       = Vector3.new(7252,202,2269),
+	["The Theatre"]           = Vector3.new(7510,147,-3613),
+	["The Vault"]             = Vector3.new(5740,224,-3178),
+	["Waiting Room"]          = Vector3.new(12398,284,-5296),
+	["Yellow Button"]         = Vector3.new(8510,214,-1242),
+	["Yellow Door"]           = Vector3.new(7195,168,-1638),
+}
+
+local HOUSING_TP = {
+	["Black Tower (Celestial Field)"] = Vector3.new(1387,137,-3217),
+	["Boathouse (Long Coast)"]        = Vector3.new(-484,4,-1692),
+	["Castle (Topple Town)"]          = Vector3.new(589,312,-678),
+	["Ice Spire (Matumada)"]          = Vector3.new(-2169,40,-1229),
+	["Starter House (Topple Town)"]   = Vector3.new(641,237,-462),
+	["Two Story House (Topple Town)"] = Vector3.new(626,258,-552),
+	["White Tower (Quiet Field)"]     = Vector3.new(2092,121,-458),
+}
+
+local VENDOR_TP = {
+	["Amy Thistlewitch"] = Vector3.new(-2937,228,-665),
+	["Arbewhy"]          = Vector3.new(-2939,230,-1156),
+	["Archaeologist"]    = Vector3.new(1553,72,-1632),
+}
+
+-- ===================== RAYFIELD INIT =====================
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 
 local Window = Rayfield:CreateWindow({
@@ -120,322 +324,468 @@ local Window = Rayfield:CreateWindow({
 	LoadingTitle = "FF Hub",
 	LoadingSubtitle = "by SeventhBuilder",
 	Theme = "Default",
-	ConfigurationSaving = {Enabled = false}
+	ConfigurationSaving = {Enabled = true, FileName = "FFHub_Config"},
+	KeySystem = false,
 })
 
-local PlayerTab = Window:CreateTab("Player", 5012544693)
+local PlayerTab    = Window:CreateTab("Player",    5012544693)
 local TeleportsTab = Window:CreateTab("Teleports", 5012543481)
-local FeaturesTab = Window:CreateTab("Features", 5012544092)
-local ESPTab = Window:CreateTab("ESP", 5012543246)
-local SettingsTab = Window:CreateTab("Settings", 5012544372)
-local ShopsTab = Window:CreateTab("Shops", 5012544372)
+local FeaturesTab  = Window:CreateTab("Features",  5012544092)
+local AutoFarmTab  = Window:CreateTab("AutoFarm",  5012543246)
+local ESPTab       = Window:CreateTab("ESP",       5012543246)
+local ShopsTab     = Window:CreateTab("Shops",     5012544372)
+local SettingsTab  = Window:CreateTab("Settings",  5012544372)
 
--- ===================== PRESENT FINDER (FULLY FIXED & IMPROVED) =====================
-local LatestPresent = nil  -- stores the most recent present for teleport
+StarterGui:SetCore("SendNotification", {Title = "FF Hub", Text = "Loaded! by SeventhBuilder"})
 
--- Modern mark function
-local function mark(part)
-    if part:FindFirstChild("parttrace") then return end
-    
-    local epic = Instance.new("Part")
-    epic.Name = "parttrace"
-    epic.Parent = part
-    epic.Position = part.Position
-    epic.Size = Vector3.new(0.3, 0.3, 0.3)
-    epic.Anchored = true
-    epic.Transparency = 1
-    epic.CanCollide = false
+-- ===================== PRESENT FINDER =====================
+local LatestPresent = nil
 
-    local billgui = Instance.new("BillboardGui", epic)
-    billgui.Name = "ESP"
-    billgui.Adornee = epic
-    billgui.AlwaysOnTop = true
-    billgui.Size = UDim2.new(0, 200, 0, 50)
+local function markPresent(part)
+	if part:FindFirstChild("parttrace") then return end
+	local epic = Instance.new("Part")
+	epic.Name = "parttrace"
+	epic.Parent = part
+	epic.Position = part.Position
+	epic.Size = Vector3.new(0.3,0.3,0.3)
+	epic.Anchored = true
+	epic.Transparency = 1
+	epic.CanCollide = false
 
-    local textlab = Instance.new("TextLabel", billgui)
-    textlab.BackgroundTransparency = 1
-    textlab.Size = UDim2.new(1, 0, 1, 0)
-    textlab.Font = Enum.Font.GothamBold
-    textlab.TextSize = 18
-    textlab.Text = "🎁 PRESENT"
-    textlab.TextColor3 = Color3.fromRGB(255, 80, 80)
-    textlab.TextStrokeTransparency = 0.4
-    textlab.TextStrokeColor3 = Color3.new(0, 0, 0)
+	local billgui = Instance.new("BillboardGui", epic)
+	billgui.Name = "ESP"
+	billgui.Adornee = epic
+	billgui.AlwaysOnTop = true
+	billgui.ExtentsOffset = Vector3.new(0,1,0)
+	billgui.Size = UDim2.new(0,200,0,50)
+
+	local textlab = Instance.new("TextLabel", billgui)
+	textlab.BackgroundTransparency = 1
+	textlab.Size = UDim2.new(1,0,1,0)
+	textlab.Font = Enum.Font.GothamBold
+	textlab.TextSize = 18
+	textlab.Text = "🎁 PRESENT"
+	textlab.TextColor3 = Color3.fromRGB(255,80,80)
+	textlab.TextStrokeTransparency = 0.4
+	textlab.TextStrokeColor3 = Color3.new(0,0,0)
+	textlab.ZIndex = 10
 end
 
--- Use the SAME goto function from your main script
--- (no need to redefine it here)
+-- BindableFunction lets the OS notification button actually teleport (from old script)
+local presentBindable = Instance.new("BindableFunction")
+presentBindable.OnInvoke = function()
+	if LatestPresent and LatestPresent.Parent then
+		goto(LatestPresent.Position)
+		Rayfield:Notify({Title="Teleported!", Content="Arrived at present.", Duration=3})
+	else
+		Rayfield:Notify({Title="Error", Content="Present no longer exists.", Duration=3})
+	end
+end
 
--- Present detection
 local function onPresentFound(present)
-    repeat task.wait() until present:FindFirstChild("PP")
-    local part = present:FindFirstChildOfClass("Part")
-    if not part then return end
+	repeat task.wait() until present:FindFirstChild("PP")
+	local part = present:FindFirstChildOfClass("Part")
+	if not part then return end
+	markPresent(part)
+	LatestPresent = part
 
-    mark(part)
-    LatestPresent = part  -- save for teleport button
-
-    Rayfield:Notify({
-        Title = "🎁 Present Found!",
-        Content = "A new present has spawned!\nClick the button below to teleport.",
-        Duration = 8,
-        Button1 = "Teleport to Present",
-        Callback = function()
-            if LatestPresent and LatestPresent.Parent then
-                goto(LatestPresent.Position)
-                Rayfield:Notify({Title = "Teleported!", Content = "Moved to the present.", Duration = 3})
-            else
-                Rayfield:Notify({Title = "Error", Content = "Present no longer exists.", Duration = 3})
-            end
-        end
-    })
+	if notif.present then
+		-- This fires the OS notification with a teleport button (old script style)
+		StarterGui:SetCore("SendNotification", {
+			Title    = "🎁 Present Found!",
+			Text     = "A new present has spawned!",
+			Icon     = "rbxassetid://1053360438",
+			Duration = 8,
+			Callback = presentBindable,
+			Button1  = "Teleport to Present",
+		})
+	end
 end
 
--- Initial scan
+-- Scan existing and watch for new presents
 for _, child in pairs(Workspace:GetChildren()) do
-    if string.sub(string.lower(child.Name), 1, 7) == "present" and string.len(child.Name) == 8 then
-        onPresentFound(child)
-    end
+	if string.sub(string.lower(child.Name),1,7) == "present" and string.len(child.Name) == 8 then
+		task.spawn(onPresentFound, child)
+	end
 end
-
--- New presents (ChildAdded)
 Workspace.ChildAdded:Connect(function(child)
-    if string.sub(string.lower(child.Name), 1, 7) == "present" and string.len(child.Name) == 8 then
-        onPresentFound(child)
-    end
+	if string.sub(string.lower(child.Name),1,7) == "present" and string.len(child.Name) == 8 then
+		task.spawn(onPresentFound, child)
+	end
 end)
 
--- ===================== ADD TO FEATURES TAB =====================
+-- ===================== FEATURES TAB =====================
 FeaturesTab:CreateSection("Present Finder")
 
-FeaturesTab:CreateButton({
-    Name = "Teleport to Latest Present",
-    Callback = function()
-        if LatestPresent and LatestPresent.Parent then
-            goto(LatestPresent.Position)
-            Rayfield:Notify({Title = "Success", Content = "Teleported to present!", Duration = 3})
-        else
-            Rayfield:Notify({Title = "No Present", Content = "No present detected yet.", Duration = 4})
-        end
-    end
+FeaturesTab:CreateToggle({
+	Name = "Present Notifications",
+	CurrentValue = true,
+	Flag = "PresentNotif",
+	Callback = function(v)
+		notif.present = v
+		Rayfield:Notify({Title="Present Finder", Content=v and "Notifications ON" or "Notifications OFF", Duration=3})
+	end
 })
+FeaturesTab:CreateButton({
+	Name = "Teleport to Latest Present",
+	Callback = function()
+		if LatestPresent and LatestPresent.Parent then
+			goto(LatestPresent.Position)
+			Rayfield:Notify({Title="Success", Content="Teleported to present!", Duration=3})
+		else
+			Rayfield:Notify({Title="No Present", Content="No present detected yet.", Duration=4})
+		end
+	end
+})
+
+FeaturesTab:CreateSection("NPC Finders")
 
 FeaturesTab:CreateToggle({
-    Name = "Enable Present Notifications",
-    CurrentValue = true,
-    Callback = function(Value)
-        -- You can add extra logic here later if needed
-        Rayfield:Notify({Title = "Present Finder", Content = Value and "Notifications ENABLED" or "Notifications DISABLED", Duration = 3})
-    end
-})
-
-Rayfield:Notify({
-    Title = "🎁 Present Finder",
-    Content = "Present detector is now active!\nLook for notifications when a present spawns.",
-    Duration = 6
-})
-
--- ===================== ALL TELEPORTS (COMPLETE) =====================
-TeleportsTab:CreateSection("Overworld Teleports")
-TeleportsTab:CreateDropdown({
-	Name = "Overworld Teleports",
-	Options = {"A Frontier Of Dragons", "Abandoned Orchard", "Ancient Forest", "Blackrock Mountain", "Blue Ogre Camp", "Celestial Field", "Celestial Peak", "Clamstack Cave", "Coral Bay", "Farm Fortress", "Frigid Waste (PvP)", "Gnome Magic School", "Great Pine Forest", "Greenhorn Grove", "Hoodlum Falls", "Matumada", "Otherworld Tower", "Pebble Bay", "Petrified Grassland", "Pit Depths", "Rabbit Hole", "Red Ant Cove", "Rubble Spring", "Starry Point", "Strangeman's Domain", "The Deep Forest", "The Forgotten Lands", "The Long Coast", "The Maze Wood", "The Pits", "The Quiet Field", "The Rolling Road", "The Spider's Nest", "The Town of Right and Wrong", "Topple Hill", "Topple Lake", "Topple Town", "Twinkling Meadow", "Upper Island"},
-	CurrentOption = {""},
-	MultipleOptions = false,
-	Callback = function(Option)
-		local choice = Option[1]
-		if choice == "A Frontier Of Dragons" then goto(Vector3.new(1184, 91, -2823)) end
-		if choice == "Abandoned Orchard" then goto(Vector3.new(271, 88, -1840)) end
-		if choice == "Ancient Forest" then goto(Vector3.new(676, 236, -1246)) end
-		if choice == "Blackrock Mountain" then goto(Vector3.new(-594, 140, -612)) end
-		if choice == "Blue Ogre Camp" then goto(Vector3.new(-865, 57, -1546)) end
-		if choice == "Celestial Field" then goto(Vector3.new(1534, 92, -2899)) end
-		if choice == "Celestial Peak" then goto(Vector3.new(1473, 195, -2483)) end
-		if choice == "Clamstack Cave" then goto(Vector3.new(565, 158, -952)) end
-		if choice == "Coral Bay" then goto(Vector3.new(1867, 1, -2765)) end
-		if choice == "Farm Fortress" then goto(Vector3.new(166, 53, 415)) end
-		if choice == "Frigid Waste (PvP)" then goto(Vector3.new(-1737, 155, -785)) end
-		if choice == "Gnome Magic School" then goto(Vector3.new(789, 240, -574)) end
-		if choice == "Great Pine Forest" then goto(Vector3.new(-13, 73, -1274)) end
-		if choice == "Greenhorn Grove" then goto(Vector3.new(296, 73, -217)) end
-		if choice == "Hoodlum Falls" then goto(Vector3.new(1777, 61, -997)) end
-		if choice == "Matumada" then goto(Vector3.new(-978, 1, -2486)) end
-		if choice == "Otherworld Tower" then goto(Vector3.new(1178, 86, -3352)) end
-		if choice == "Pebble Bay" then goto(Vector3.new(-44, 2, 719)) end
-		if choice == "Petrified Grassland" then goto(Vector3.new(1655, 73, -1331)) end
-		if choice == "Pit Depths" then goto(Vector3.new(1183, -59, -2080)) end
-		if choice == "Rabbit Hole" then goto(Vector3.new(-3233, 245, -2623)) end
-		if choice == "Red Ant Cove" then goto(Vector3.new(886, 63, 362)) end
-		if choice == "Rubble Spring" then goto(Vector3.new(1062, 73, -534)) end
-		if choice == "Starry Point" then goto(Vector3.new(2265, 5, 481)) end
-		if choice == "Strangeman's Domain" then goto(Vector3.new(-4778, 267, 732)) end
-		if choice == "The Deep Forest" then goto(Vector3.new(1585, 73, 112)) end
-		if choice == "The Forgotten Lands" then goto(Vector3.new(-779, 92, -1200)) end
-		if choice == "The Long Coast" then goto(Vector3.new(-1172, 3, -1303)) end
-		if choice == "The Maze Wood" then goto(Vector3.new(692, 89, -2388)) end
-		if choice == "The Pits" then goto(Vector3.new(1320, 89, -2430)) end
-		if choice == "The Quiet Field" then goto(Vector3.new(2013, 111, -447)) end
-		if choice == "The Rolling Road" then goto(Vector3.new(1731, 92, -2404)) end
-		if choice == "The Spider's Nest" then goto(Vector3.new(1500, 209, -3701)) end
-		if choice == "The Town of Right and Wrong" then goto(Vector3.new(1115, 92, -3134)) end
-		if choice == "Topple Hill" then goto(Vector3.new(777, 199, -312)) end
-		if choice == "Topple Lake" then goto(Vector3.new(615, 256, -757)) end
-		if choice == "Topple Town" then goto(Vector3.new(685, 226, -461)) end
-		if choice == "Twinkling Meadow" then goto(Vector3.new(92, 73, -752)) end
-		if choice == "Upper Island" then goto(Vector3.new(-1361, 35, -2278)) end
+	Name = "Frog Finder Notifications",
+	CurrentValue = true,
+	Flag = "FrogNotif",
+	Callback = function(v)
+		notif.frog = v
+		Rayfield:Notify({Title="Frog Finder", Content=v and "Notifications ON" or "Notifications OFF", Duration=3})
 	end
 })
-
-TeleportsTab:CreateSection("Ratboy's Nightmare Teleports")
-TeleportsTab:CreateDropdown({
-	Name = "Ratboy's Nightmare Teleports",
-	Options = {"Back of The Theatre", "Blue Button", "Blue Door", "Cyan (Teal) Button", "Cyan (Teal) Door", "End of the Road", "Fish Hall", "Green Button", "Green Door", "Inside", "Maze of the Root", "Meeting Place", "MYSTERY STORE", "Orange Button", "Orange Door", "Pink Button", "Pink Door", "Purple Button", "Purple Door", "Red Button", "Red Door", "The Back Area", "The Ballroom", "The Deli", "The Grand Hall", "The Hidden Library", "The Library of Riddles", "The Lost", "The Mansion", "The Old Cave", "The Old Mansion", "The Plant Room", "The Road", "The Supermarket", "The Theatre", "The Vault", "Waiting Room", "Yellow Button", "Yellow Door"},
-	CurrentOption = {""},
-	MultipleOptions = false,
-	Callback = function(Option)
-		local choice = Option[1]
-		if choice == "Back of The Theatre" then goto(Vector3.new(7799, 172, -3629)) end
-		if choice == "Blue Button" then goto(Vector3.new(7285, 172, -2549)) end
-		if choice == "Blue Door" then goto(Vector3.new(7149, 169, -1621)) end
-		if choice == "Cyan (Teal) Button" then goto(Vector3.new(7203, 244, 2235)) end
-		if choice == "Cyan (Teal) Door" then goto(Vector3.new(7794, 204, 2212)) end
-		if choice == "End of the Road" then goto(Vector3.new(10779, 375, -12512)) end
-		if choice == "Fish Hall" then goto(Vector3.new(12905, 205, 5036)) end
-		if choice == "Green Button" then goto(Vector3.new(7926, 157, -3546)) end
-		if choice == "Green Door" then goto(Vector3.new(7298, 171, -2543)) end
-		if choice == "Inside" then goto(Vector3.new(7311, 171, -2558)) end
-		if choice == "Maze of the Root" then goto(Vector3.new(13132, 191, 7532)) end
-		if choice == "Meeting Place" then goto(Vector3.new(7514, 237, -4952)) end
-		if choice == "MYSTERY STORE" then goto(Vector3.new(6765, 200, -2545)) end
-		if choice == "Orange Button" then goto(Vector3.new(7129, 143, -1587)) end
-		if choice == "Orange Door" then goto(Vector3.new(6985, 141, -1635)) end
-		if choice == "Pink Button" then goto(Vector3.new(7208, 154, -1717)) end
-		if choice == "Pink Door" then goto(Vector3.new(7163, 168, -1742)) end
-		if choice == "Purple Button" then goto(Vector3.new(7297, 147, -1701)) end
-		if choice == "Purple Door" then goto(Vector3.new(7021, 141, -1689)) end
-		if choice == "Red Button" then goto(Vector3.new(7261, 200, -2147)) end
-		if choice == "Red Door" then goto(Vector3.new(7229, 168, -814)) end
-		if choice == "The Back Area" then goto(Vector3.new(7206, 244, 2122)) end
-		if choice == "The Ballroom" then goto(Vector3.new(11825, 318, 2432)) end
-		if choice == "The Deli" then goto(Vector3.new(7070, 140, -1621)) end
-		if choice == "The Grand Hall" then goto(Vector3.new(5928, 211, 4845)) end
-		if choice == "The Hidden Library" then goto(Vector3.new(8170, 187, -949)) end
-		if choice == "The Library of Riddles" then goto(Vector3.new(7332, 157, -1636)) end
-		if choice == "The Lost" then goto(Vector3.new(5858, 157, 4904)) end
-		if choice == "The Mansion" then goto(Vector3.new(7003, 140, -1639)) end
-		if choice == "The Old Cave" then goto(Vector3.new(13099, 174, 6944)) end
-		if choice == "The Old Mansion" then goto(Vector3.new(7242, 168, -2114)) end
-		if choice == "The Plant Room" then goto(Vector3.new(7066, 159, -855)) end
-		if choice == "The Road" then goto(Vector3.new(10759, 201, 8595)) end
-		if choice == "The Supermarket" then goto(Vector3.new(7252, 202, 2269)) end
-		if choice == "The Theatre" then goto(Vector3.new(7510, 147, -3613)) end
-		if choice == "The Vault" then goto(Vector3.new(5740, 224, -3178)) end
-		if choice == "Waiting Room" then goto(Vector3.new(12398, 284, -5296)) end
-		if choice == "Yellow Button" then goto(Vector3.new(8510, 214, -1242)) end
-		if choice == "Yellow Door" then goto(Vector3.new(7195, 168, -1638)) end
-	end
-})
-
-TeleportsTab:CreateSection("Housing & Vendor")
-TeleportsTab:CreateDropdown({
-	Name = "Housing Teleports",
-	Options = {"Black Tower (Celestial Field)", "Boathouse (Long Coast)", "Castle (Topple Town)", "Ice Spire (Matumada)", "Starter House (Topple Town)", "Two Story House (Topple Town)", "White Tower (Quiet Field)"},
-	CurrentOption = {""},
-	MultipleOptions = false,
-	Callback = function(Option)
-		local choice = Option[1]
-		if choice == "Black Tower (Celestial Field)" then goto(Vector3.new(1387, 137, -3217)) end
-		if choice == "Boathouse (Long Coast)" then goto(Vector3.new(-484, 4, -1692)) end
-		if choice == "Castle (Topple Town)" then goto(Vector3.new(589, 312, -678)) end
-		if choice == "Ice Spire (Matumada)" then goto(Vector3.new(-2169, 40, -1229)) end
-		if choice == "Starter House (Topple Town)" then goto(Vector3.new(641, 237, -462)) end
-		if choice == "Two Story House (Topple Town)" then goto(Vector3.new(626, 258, -552)) end
-		if choice == "White Tower (Quiet Field)" then goto(Vector3.new(2092, 121, -458)) end
-	end
-})
-
-TeleportsTab:CreateDropdown({
-	Name = "Vendor Teleports",
-	Options = {"Amy Thistlewitch", "Arbewhy", "Archaeologist"},
-	CurrentOption = {""},
-	MultipleOptions = false,
-	Callback = function(Option)
-		local choice = Option[1]
-		if choice == "Amy Thistlewitch" then goto(Vector3.new(-2937, 228, -665)) end
-		if choice == "Arbewhy" then goto(Vector3.new(-2939, 230, -1156)) end
-		if choice == "Archaeologist" then goto(Vector3.new(1553, 72, -1632)) end
-	end
-})
-
--- ===================== FEATURES TAB =====================
-FeaturesTab:CreateSection("Abilities")
-FeaturesTab:CreateButton({Name = "Remove All Trees", Callback = function()
-	for _, instance in pairs(Workspace:GetDescendants()) do
-		if instance.Name == "PostTrees" then instance:Destroy() end
-	end
-	Rayfield:Notify({Title = "Status", Content = "All trees removed!", Duration = 3})
-end})
-
 FeaturesTab:CreateButton({Name = "Get Grateful Frog", Callback = function()
-	if Workspace.Spawners["The Sprutle Frog Expansion_Updated"]:FindFirstChild("Spawner_GratefulFrogs") then
-		if Workspace.Spawners["The Sprutle Frog Expansion_Updated"]["Spawner_GratefulFrogs"]:FindFirstChild("Collectible") then
-			Rayfield:Notify({Title = "Frog Finder", Content = "Frog found!", Duration = 3})
-			if Workspace.Spawners["The Sprutle Frog Expansion_Updated"]["Spawner_GratefulFrogs"].Collectible:FindFirstChildWhichIsA("BasePart") then
-				goto(Workspace.Spawners["The Sprutle Frog Expansion_Updated"]["Spawner_GratefulFrogs"].Collectible:FindFirstChildWhichIsA("BasePart").Position)
-				for p = 1, 50 do
-					task.wait()
-					Workspace.Spawners["The Sprutle Frog Expansion_Updated"]["Spawner_GratefulFrogs"].Collectible.InteractEvent:FireServer()
+	local spawner = Workspace.Spawners["The Sprutle Frog Expansion_Updated"]
+	if not spawner then
+		if notif.frog then Rayfield:Notify({Title="Frog Finder", Content="Frog spawner not found.", Duration=3}) end
+		return
+	end
+	local frogSpawner = spawner:FindFirstChild("Spawner_GratefulFrogs")
+	if not frogSpawner then
+		if notif.frog then Rayfield:Notify({Title="Frog Finder", Content="No frog spawner.", Duration=3}) end
+		return
+	end
+	if frogSpawner:FindFirstChild("Collectible") then
+		local part = frogSpawner.Collectible:FindFirstChildWhichIsA("BasePart")
+		if part then
+			if notif.frog then Rayfield:Notify({Title="Frog Finder", Content="Frog found! Teleporting...", Duration=3}) end
+			goto(part.Position)
+			for p = 1, 50 do
+				task.wait()
+				if frogSpawner:FindFirstChild("Collectible") and frogSpawner.Collectible:FindFirstChild("InteractEvent") then
+					frogSpawner.Collectible.InteractEvent:FireServer()
 				end
 			end
+			if notif.frog then Rayfield:Notify({Title="Frog Finder", Content="Collection attempt done!", Duration=3}) end
 		else
-			Rayfield:Notify({Title = "Frog Finder", Content = "No frog found.", Duration = 3})
+			-- Frog not loaded yet — move around spawn to load it
+			if notif.frog then
+				Rayfield:Notify({Title="Frog Finder", Content="Frog present but not loaded. Moving to spawn...", Duration=5})
+			end
+			repeat
+				local spawnBrick = frogSpawner.SpawnLocations:FindFirstChild("SpawnBrick")
+				if not spawnBrick then break end
+				goto(spawnBrick.Position + Vector3.new(0,10,0))
+				task.wait(0.5)
+			until frogSpawner.Collectible:FindFirstChildWhichIsA("BasePart")
+				or not frogSpawner.SpawnLocations:FindFirstChild("SpawnBrick")
+
+			if frogSpawner.Collectible:FindFirstChildWhichIsA("BasePart") then
+				goto(frogSpawner.Collectible:FindFirstChildWhichIsA("BasePart").Position)
+				for p = 1, 50 do
+					task.wait()
+					if frogSpawner:FindFirstChild("Collectible") and frogSpawner.Collectible:FindFirstChild("InteractEvent") then
+						frogSpawner.Collectible.InteractEvent:FireServer()
+					end
+				end
+				if notif.frog then Rayfield:Notify({Title="Frog Finder", Content="Frog collected!", Duration=3}) end
+			else
+				if notif.frog then Rayfield:Notify({Title="Frog Finder", Content="Frog failed to load.", Duration=4}) end
+			end
 		end
 	else
-		Rayfield:Notify({Title = "Frog Finder", Content = "No frog found.", Duration = 3})
+		if notif.frog then Rayfield:Notify({Title="Frog Finder", Content="No frog found.", Duration=3}) end
 	end
 end})
 
+FeaturesTab:CreateToggle({
+	Name = "Cosmic Ghost Notifications",
+	CurrentValue = true,
+	Flag = "CosmicNotif",
+	Callback = function(v)
+		notif.cosmic = v
+		Rayfield:Notify({Title="Cosmic Ghost", Content=v and "Notifications ON" or "Notifications OFF", Duration=3})
+	end
+})
 FeaturesTab:CreateButton({Name = "Check For Cosmic Ghost", Callback = function()
-	local npcsFolder = Workspace:FindFirstChild("NPCS")
-	if npcsFolder and npcsFolder:FindFirstChild("CosmicFloatingMonsterHeadNPC") then
-		Rayfield:Notify({Title = "Status", Content = "Cosmic Ghost found!", Duration = 3})
-		goto(npcsFolder:FindFirstChild("CosmicFloatingMonsterHeadNPC"):FindFirstChildWhichIsA("BasePart",true).Position + Vector3.new(10,10,10))
+	local npcs = Workspace:FindFirstChild("NPCS")
+	if npcs and npcs:FindFirstChild("CosmicFloatingMonsterHeadNPC") then
+		local part = npcs.CosmicFloatingMonsterHeadNPC:FindFirstChildWhichIsA("BasePart", true)
+		if part then
+			if notif.cosmic then Rayfield:Notify({Title="Cosmic Ghost", Content="Found! Teleporting...", Duration=3}) end
+			goto(part.Position + Vector3.new(10,10,10))
+		else
+			if notif.cosmic then Rayfield:Notify({Title="Cosmic Ghost", Content="Found but not loaded. Move around Matumada.", Duration=5}) end
+		end
 	else
-		Rayfield:Notify({Title = "Status", Content = "Cosmic Ghost not found.", Duration = 3})
+		if notif.cosmic then Rayfield:Notify({Title="Cosmic Ghost", Content="Cosmic Ghost not found.", Duration=3}) end
 	end
 end})
 
+FeaturesTab:CreateToggle({
+	Name = "Path Gambler Notifications",
+	CurrentValue = true,
+	Flag = "GamblerNotif",
+	Callback = function(v)
+		notif.gambler = v
+		Rayfield:Notify({Title="Path Gambler", Content=v and "Notifications ON" or "Notifications OFF", Duration=3})
+	end
+})
 FeaturesTab:CreateButton({Name = "Check For Path Gambler", Callback = function()
-	local npcsFolder = Workspace:FindFirstChild("NPCS")
-	if npcsFolder and npcsFolder:FindFirstChild("PathGamblerNPC") then
-		Rayfield:Notify({Title = "Status", Content = "Path Gambler found!", Duration = 3})
-		goto(npcsFolder:FindFirstChild("PathGamblerNPC"):FindFirstChildWhichIsA("BasePart",true).Position + Vector3.new(0,4,0))
+	local npcs = Workspace:FindFirstChild("NPCS")
+	if npcs and npcs:FindFirstChild("PathGamblerNPC") then
+		local part = npcs.PathGamblerNPC:FindFirstChildWhichIsA("BasePart", true)
+		if part then
+			if notif.gambler then Rayfield:Notify({Title="Path Gambler", Content="Found! Teleporting...", Duration=3}) end
+			goto(part.Position + Vector3.new(0,4,0))
+		else
+			if notif.gambler then Rayfield:Notify({Title="Path Gambler", Content="Found but not loaded. Explore Ratboy's Nightmare.", Duration=5}) end
+		end
 	else
-		Rayfield:Notify({Title = "Status", Content = "Path Gambler not found.", Duration = 3})
+		if notif.gambler then Rayfield:Notify({Title="Path Gambler", Content="Path Gambler not found.", Duration=3}) end
 	end
 end})
 
-FeaturesTab:CreateButton({Name = "Faster Kills", Callback = function() loadstring(game:HttpGet(("https://raw.githubusercontent.com/SeventhBuilder/FF/main/scripts/faster-kills.lua")))() end})
---FeaturesTab:CreateButton({Name = "Auto Find Presents", Callback = function() loadstring(game:HttpGet(("https://raw.githubusercontent.com/SeventhBuilder/FF/main/scripts/auto-find-presents.lua")))() end})
-FeaturesTab:CreateButton({Name = "Fast Regen Stamina", Callback = function() loadstring(game:HttpGet(("https://raw.githubusercontent.com/SeventhBuilder/FF/main/scripts/fast-regen-stamina.lua")))() end})
-FeaturesTab:CreateButton({Name = "Bring Spider Boss Closer To Topple Town", Callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/JustApstl/FF/refs/heads/main/scripts/bring-spider-boss-closer-to-topple-town.lua"))() end})
-FeaturesTab:CreateButton({Name = "Teleport To Uncollected Ratboy Token", Callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/JustApstl/FF/refs/heads/main/scripts/teleport-to-uncollected-ratboy-token.lua"))() end})
+FeaturesTab:CreateSection("Abilities")
+FeaturesTab:CreateButton({Name = "Remove All Trees", Callback = function()
+	for _, v in pairs(Workspace:GetDescendants()) do
+		if v.Name == "PostTrees" then v:Destroy() end
+	end
+	Rayfield:Notify({Title="Status", Content="All trees removed!", Duration=3})
+end})
+
+FeaturesTab:CreateButton({Name = "Remove Fog", Callback = function()
+	pcall(function()
+		if speaker.PlayerScripts:FindFirstChild("Fog") then
+			speaker.PlayerScripts.Fog:Destroy()
+		end
+		if speaker.Character:FindFirstChild("Fogbox") then
+			for _, ring in pairs({"Ring1","Ring2","Ring3"}) do
+				local r = speaker.Character.Fogbox:FindFirstChild(ring)
+				if r then r:Destroy() end
+			end
+		end
+	end)
+	Rayfield:Notify({Title="Status", Content="Fog removed!", Duration=3})
+end})
+
+FeaturesTab:CreateButton({Name = "Faster Kills", Callback = function()
+	loadstring(game:HttpGet("https://raw.githubusercontent.com/SeventhBuilder/FF/main/scripts/faster-kills.lua"))()
+end})
+FeaturesTab:CreateButton({Name = "Fast Regen Stamina", Callback = function()
+	loadstring(game:HttpGet("https://raw.githubusercontent.com/SeventhBuilder/FF/main/scripts/fast-regen-stamina.lua"))()
+end})
+FeaturesTab:CreateButton({Name = "Bring Spider Boss Closer", Callback = function()
+	loadstring(game:HttpGet("https://raw.githubusercontent.com/JustApstl/FF/refs/heads/main/scripts/bring-spider-boss-closer-to-topple-town.lua"))()
+end})
+FeaturesTab:CreateButton({Name = "Teleport to Uncollected Ratboy Token", Callback = function()
+	loadstring(game:HttpGet("https://raw.githubusercontent.com/JustApstl/FF/refs/heads/main/scripts/teleport-to-uncollected-ratboy-token.lua"))()
+end})
+
+-- ===================== AUTOFARM TAB =====================
+AutoFarmTab:CreateSection("Firefly Stones")
+AutoFarmTab:CreateToggle({
+	Name = "Firefly Notifications",
+	CurrentValue = true,
+	Flag = "FireflyNotif",
+	Callback = function(v) notif.firefly = v end
+})
+AutoFarmTab:CreateToggle({
+	Name = "Firefly Stones AutoFarm",
+	CurrentValue = false,
+	Flag = "FireflyFarm",
+	Callback = function(v)
+		ffarm = v
+		if v then
+			checkTP()
+			if notif.firefly then Rayfield:Notify({Title="AutoFarm", Content="Firefly Stones ENABLED", Duration=3}) end
+		else
+			if notif.firefly then Rayfield:Notify({Title="AutoFarm", Content="Firefly Stones DISABLED", Duration=3}) end
+		end
+	end
+})
+
+AutoFarmTab:CreateSection("Bird Nests")
+AutoFarmTab:CreateToggle({
+	Name = "Bird Nest Notifications",
+	CurrentValue = true,
+	Flag = "BirdNotif",
+	Callback = function(v) notif.birdnest = v end
+})
+AutoFarmTab:CreateToggle({
+	Name = "Bird Nests AutoFarm",
+	CurrentValue = false,
+	Flag = "BirdFarm",
+	Callback = function(v)
+		bfarm = v
+		if v then
+			goto(Vector3.new(-1405,325,-2271))
+			task.wait(1)
+			checkTP()
+			if notif.birdnest then Rayfield:Notify({Title="AutoFarm", Content="Bird Nests ENABLED", Duration=3}) end
+		else
+			Rayfield:Notify({Title="AutoFarm", Content="Bird Nests DISABLED", Duration=3})
+		end
+	end
+})
+
+AutoFarmTab:CreateSection("Deli")
+AutoFarmTab:CreateDropdown({
+	Name = "Deli AutoFarm Mode",
+	Options = {"Both (Random)", "Short Wait", "Long Wait"},
+	CurrentOption = {"Both (Random)"},
+	Flag = "DeliMode",
+	Callback = function(opt)
+		local mode = opt[1]
+		if mode == "Short Wait" then
+			shortwait = true; longwait = false; randomboth = false
+		elseif mode == "Long Wait" then
+			longwait = true; shortwait = false; randomboth = false
+		else
+			randomboth = true; shortwait = false; longwait = false
+		end
+		Rayfield:Notify({Title="Deli", Content="Mode: "..mode, Duration=3})
+	end
+})
+AutoFarmTab:CreateToggle({
+	Name = "Deli AutoFarm",
+	CurrentValue = false,
+	Flag = "DeliFarm",
+	Callback = function(v)
+		dfarm = v
+		if v then
+			goto(Vector3.new(7066,144,-1621))
+			task.wait(3)
+			Rayfield:Notify({Title="AutoFarm", Content="Deli ENABLED", Duration=3})
+		else
+			Rayfield:Notify({Title="AutoFarm", Content="Deli DISABLED", Duration=3})
+		end
+	end
+})
+
+AutoFarmTab:CreateSection("The Lost (Requires Hidden Key)")
+AutoFarmTab:CreateToggle({
+	Name = "Lost AutoFarm",
+	CurrentValue = false,
+	Flag = "LostFarm",
+	Callback = function(v)
+		if v then
+			-- Verify Hidden Key in inventory
+			local hasKey = false
+			pcall(function()
+				local invFrame = Players.LocalPlayer.PlayerGui.Container.Main["INV_SF"]
+				for _, item in pairs(invFrame:GetDescendants()) do
+					if item.Name == "ItemCode" and item.Value == 2025 then
+						hasKey = true
+						break
+					end
+				end
+			end)
+			if hasKey then
+				amountEmptyInventory = 20
+				lfarm = true
+				goto(Vector3.new(5857,157,4907))
+				task.wait(1.5)
+				Rayfield:Notify({Title="AutoFarm", Content="Lost Farm ENABLED", Duration=3})
+			else
+				lfarm = false
+				Rayfield:Notify({Title="AutoFarm", Content="❌ Hidden Key required! Farm not started.", Duration=5})
+			end
+		else
+			lfarm = false
+			amountEmptyInventory = 20
+			Rayfield:Notify({Title="AutoFarm", Content="Lost Farm DISABLED", Duration=3})
+		end
+	end
+})
+
+-- ===================== TELEPORTS TAB =====================
+TeleportsTab:CreateSection("Overworld")
+TeleportsTab:CreateDropdown({
+	Name = "Overworld Teleports",
+	Options = {
+		"A Frontier Of Dragons","Abandoned Orchard","Ancient Forest","Blackrock Mountain",
+		"Blue Ogre Camp","Celestial Field","Celestial Peak","Clamstack Cave","Coral Bay",
+		"Farm Fortress","Frigid Waste (PvP)","Gnome Magic School","Great Pine Forest",
+		"Greenhorn Grove","Hoodlum Falls","Matumada","Otherworld Tower","Pebble Bay",
+		"Petrified Grassland","Pit Depths","Rabbit Hole","Red Ant Cove","Rubble Spring",
+		"Starry Point","Strangeman's Domain","The Deep Forest","The Forgotten Lands",
+		"The Long Coast","The Maze Wood","The Pits","The Quiet Field","The Rolling Road",
+		"The Spider's Nest","The Town of Right and Wrong","Topple Hill","Topple Lake",
+		"Topple Town","Twinkling Meadow","Upper Island"
+	},
+	CurrentOption = {""},
+	MultipleOptions = false,
+	Callback = function(opt)
+		if OVERWORLD_TP[opt[1]] then goto(OVERWORLD_TP[opt[1]]) end
+	end
+})
+
+TeleportsTab:CreateSection("Ratboy's Nightmare")
+TeleportsTab:CreateDropdown({
+	Name = "Ratboy's Nightmare Teleports",
+	Options = {
+		"Back of The Theatre","Blue Button","Blue Door","Cyan (Teal) Button","Cyan (Teal) Door",
+		"End of the Road","Fish Hall","Green Button","Green Door","Inside","Maze of the Root",
+		"Meeting Place","MYSTERY STORE","Orange Button","Orange Door","Pink Button","Pink Door",
+		"Purple Button","Purple Door","Red Button","Red Door","The Back Area","The Ballroom",
+		"The Deli","The Grand Hall","The Hidden Library","The Library of Riddles","The Lost",
+		"The Mansion","The Old Cave","The Old Mansion","The Plant Room","The Road",
+		"The Supermarket","The Theatre","The Vault","Waiting Room","Yellow Button","Yellow Door"
+	},
+	CurrentOption = {""},
+	MultipleOptions = false,
+	Callback = function(opt)
+		if RATBOY_TP[opt[1]] then goto(RATBOY_TP[opt[1]]) end
+	end
+})
+
+TeleportsTab:CreateSection("Housing & Vendors")
+TeleportsTab:CreateDropdown({
+	Name = "Housing Teleports",
+	Options = {
+		"Black Tower (Celestial Field)","Boathouse (Long Coast)","Castle (Topple Town)",
+		"Ice Spire (Matumada)","Starter House (Topple Town)","Two Story House (Topple Town)",
+		"White Tower (Quiet Field)"
+	},
+	CurrentOption = {""},
+	MultipleOptions = false,
+	Callback = function(opt)
+		if HOUSING_TP[opt[1]] then goto(HOUSING_TP[opt[1]]) end
+	end
+})
+TeleportsTab:CreateDropdown({
+	Name = "Vendor Teleports",
+	Options = {"Amy Thistlewitch","Arbewhy","Archaeologist"},
+	CurrentOption = {""},
+	MultipleOptions = false,
+	Callback = function(opt)
+		if VENDOR_TP[opt[1]] then goto(VENDOR_TP[opt[1]]) end
+	end
+})
 
 -- ===================== PLAYER TAB =====================
 PlayerTab:CreateSection("Movement")
-PlayerTab:CreateSlider({Name = "Walk Speed", Range = {0,100}, Increment = 1, CurrentValue = 18, Callback = function(v) walkspeed = v end})
-PlayerTab:CreateSlider({Name = "Jump Power", Range = {0,300}, Increment = 1, CurrentValue = 81.5, Callback = function(v) jumppower = v end})
-PlayerTab:CreateSlider({Name = "Gravity", Range = {0,900}, Increment = 1, CurrentValue = gravity, Callback = function(v) gravity = v end})
-PlayerTab:CreateSlider({Name = "Slope Angle", Range = {0,90}, Increment = 1, CurrentValue = 56, Callback = function(v) sangle = v end})
-PlayerTab:CreateSlider({Name = "Fly Speed", Range = {1,100}, Increment = 1, CurrentValue = 1, Callback = function(v) flyspeed = v end})
+PlayerTab:CreateSlider({Name="Walk Speed",  Range={0,100}, Increment=1,   CurrentValue=18,    Flag="WalkSpeed",  Callback=function(v) walkspeed=v end})
+PlayerTab:CreateSlider({Name="Jump Power",  Range={0,300}, Increment=1,   CurrentValue=81.5,  Flag="JumpPower",  Callback=function(v) jumppower=v end})
+PlayerTab:CreateSlider({Name="Gravity",     Range={0,900}, Increment=1,   CurrentValue=196.2, Flag="Gravity",    Callback=function(v) gravity=v end})
+PlayerTab:CreateSlider({Name="Slope Angle", Range={0,90},  Increment=1,   CurrentValue=56,    Flag="SlopeAngle", Callback=function(v) sangle=v end})
+PlayerTab:CreateSlider({Name="Fly Speed",   Range={1,100}, Increment=1,   CurrentValue=1,     Flag="FlySpeed",   Callback=function(v) flyspeed=v; iyflyspeed=v end})
 
-PlayerTab:CreateToggle({Name = "Noclip", CurrentValue = false, Callback = function(v)
+PlayerTab:CreateToggle({Name="Noclip", CurrentValue=false, Flag="Noclip", Callback=function(v)
 	Clip = not v
 	if v then
 		Noclipping = RunService.Stepped:Connect(function()
 			if not Clip and speaker.Character then
 				for _, child in pairs(speaker.Character:GetDescendants()) do
-					if child:IsA("BasePart") and child.CanCollide then child.CanCollide = false end
+					if child:IsA("BasePart") and child.CanCollide then
+						child.CanCollide = false
+					end
 				end
 			end
 		end)
@@ -444,67 +794,171 @@ PlayerTab:CreateToggle({Name = "Noclip", CurrentValue = false, Callback = functi
 	end
 end})
 
-PlayerTab:CreateToggle({Name = "Fly", CurrentValue = false, Callback = function(v)
-	if v then sFLY() else NOFLY() end
+PlayerTab:CreateToggle({Name="Fly", CurrentValue=false, Flag="Fly", Callback=function(v)
+	if v then NOFLY() task.wait() sFLY()
+	else NOFLY() end
 end})
 
-PlayerTab:CreateButton({Name = "B-Tools", Callback = function()
-	for _, v in pairs(Workspace:GetDescendants()) do if v:IsA("BasePart") then v.Locked = false end end
+PlayerTab:CreateSection("Tools")
+PlayerTab:CreateButton({Name="B-Tools", Callback=function()
+	for _, v in pairs(Workspace:GetDescendants()) do
+		if v:IsA("BasePart") then v.Locked = false end
+	end
 	for i = 1, 4 do
 		local Tool = Instance.new("HopperBin")
 		Tool.BinType = i
 		Tool.Parent = speaker:FindFirstChildOfClass("Backpack")
 	end
+	Rayfield:Notify({Title="B-Tools", Content="Tools added to backpack!", Duration=3})
+end})
+PlayerTab:CreateButton({Name="Infinite Yield", Callback=function()
+	loadstring(game:HttpGet('https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source'))()
 end})
 
-PlayerTab:CreateButton({Name = "Infinite Yield", Callback = function() loadstring(game:HttpGet('https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source'))() end})
-
 -- ===================== ESP TAB =====================
-ESPTab:CreateSection("Plant ESP")
-ESPTab:CreateToggle({Name = "Plant ESP", CurrentValue = false, Callback = function(v) pESP = v end})
+local spawnersFolder = Workspace.Spawners
 
-ESPTab:CreateInput({Name = "Add Plant ESP Name", PlaceholderText = "Insert Plant Name Here", Callback = function(value)
-	if value and value ~= "" then
-		for _, v in pairs(ReplicatedStorage.ItemInfo:GetDescendants()) do
-			if v.Name == "FullName" and string.lower(v.Value) == string.lower(value) and not table.find(plants, tonumber(v.Parent.Name)) then
-				table.insert(plants, tonumber(v.Parent.Name))
-				table.insert(plantNames, v.Value)
-				table.insert(loweredPlantNames, string.lower(v.Value))
-				Rayfield:Notify({Title = "Status", Content = "Added " .. v.Value .. " to Plant ESP", Duration = 4})
+-- Cleanup leftover ESP on script load
+for _, v in pairs(spawnersFolder:GetDescendants()) do
+	if v.Name == "PlantBoxHandleAdornment" or v.Name == "PlantBeam" then v:Destroy() end
+end
+
+ESPTab:CreateSection("Plant ESP")
+ESPTab:CreateToggle({Name="Plant ESP", CurrentValue=false, Flag="PlantESP", Callback=function(v)
+	pESP = v
+	if not v then
+		for _, item in pairs(spawnersFolder:GetDescendants()) do
+			if item.Name == "PlantBoxHandleAdornment" or item.Name == "PlantBeam" then
+				item:Destroy()
 			end
 		end
 	end
+	Rayfield:Notify({Title="Plant ESP", Content=v and "Enabled" or "Disabled", Duration=3})
 end})
+ESPTab:CreateInput({
+	Name = "Add Plant",
+	PlaceholderText = "Plant name...",
+	RemoveTextAfterFocus = true,
+	Callback = function(value)
+		if value and value ~= "" then
+			local found = false
+			for _, v in pairs(ReplicatedStorage.ItemInfo:GetDescendants()) do
+				if v.Name == "FullName" and string.lower(v.Value) == string.lower(value) then
+					local id = tonumber(v.Parent.Name)
+					if not table.find(plants, id) then
+						table.insert(plants, id)
+						table.insert(plantNames, v.Value)
+						table.insert(loweredPlantNames, string.lower(v.Value))
+						Rayfield:Notify({Title="Plant ESP", Content="Added: "..v.Value, Duration=3})
+					else
+						Rayfield:Notify({Title="Plant ESP", Content="Already tracking: "..v.Value, Duration=3})
+					end
+					found = true
+					break
+				end
+			end
+			if not found then
+				Rayfield:Notify({Title="Plant ESP", Content="Plant not found: "..value, Duration=3})
+			end
+		end
+	end
+})
+ESPTab:CreateInput({
+	Name = "Remove Plant",
+	PlaceholderText = "Plant name...",
+	RemoveTextAfterFocus = true,
+	Callback = function(value)
+		if value and value ~= "" then
+			for _, v in pairs(ReplicatedStorage.ItemInfo:GetDescendants()) do
+				if v.Name == "FullName" and string.lower(v.Value) == string.lower(value) then
+					local id = tonumber(v.Parent.Name)
+					local idx = table.find(plants, id)
+					if idx then
+						table.remove(plants, idx)
+						local n = table.find(plantNames, v.Value)
+						if n then table.remove(plantNames, n) end
+						local l = table.find(loweredPlantNames, string.lower(v.Value))
+						if l then table.remove(loweredPlantNames, l) end
+						-- Clean rendered ESPs
+						for _, item in pairs(spawnersFolder:GetDescendants()) do
+							if item.Name == "PlantBoxHandleAdornment" or item.Name == "PlantBeam" then
+								item:Destroy()
+							end
+						end
+						Rayfield:Notify({Title="Plant ESP", Content="Removed: "..v.Value, Duration=3})
+					end
+					break
+				end
+			end
+		end
+	end
+})
 
-ESPTab:CreateInput({Name = "Remove Plant ESP Name", PlaceholderText = "Insert Plant Name Here", Callback = function(value)
-	if value and value ~= "" then
-		for _, v in pairs(ReplicatedStorage.ItemInfo:GetDescendants()) do
-			if v.Name == "FullName" and string.lower(v.Value) == string.lower(value) then
-				local id = tonumber(v.Parent.Name)
-				local idx = table.find(plants, id)
-				if idx then table.remove(plants, idx) end
-				Rayfield:Notify({Title = "Status", Content = "Removed " .. v.Value .. " from Plant ESP", Duration = 4})
+-- ===================== SHOPS TAB =====================
+ShopsTab:CreateSection("Item Browser")
+ShopsTab:CreateButton({Name="Refresh All Shops", Callback=function()
+	repeat task.wait(0.05) until Workspace:FindFirstChild("Shops")
+	for _, shop in pairs(Workspace.Shops:GetChildren()) do
+		if shop:FindFirstChild("Slots") then
+			local lines = {}
+			for _, slot in pairs(shop.Slots:GetChildren()) do
+				for _, item in pairs(ReplicatedStorage.ItemInfo:GetChildren()) do
+					if tonumber(item.Name) == tonumber(slot.Item.Value) then
+						table.insert(lines, item.FullName.Value.." — "..slot.Price.Value.."g")
+					end
+				end
+			end
+			if #lines > 0 then
+				Rayfield:Notify({
+					Title   = shop.Name,
+					Content = table.concat(lines, "\n"),
+					Duration = 12,
+				})
+				task.wait(0.3)
 			end
 		end
 	end
 end})
 
 -- ===================== SETTINGS TAB =====================
-SettingsTab:CreateSection("Hub Settings")
-SettingsTab:CreateDropdown({Name = "UI Theme", Options = {"Default","Ocean","AmberGlow","Light","Amethyst","Green","Bloom","DarkBlue","Serenity"}, CurrentOption = {"Default"}, Callback = function(opt) Window:SetTheme(opt[1]) end})
+SettingsTab:CreateSection("UI")
+SettingsTab:CreateDropdown({
+	Name = "Theme",
+	Options = {"Default","Ocean","AmberGlow","Light","Amethyst","Green","Bloom","DarkBlue","Serenity"},
+	CurrentOption = {"Default"},
+	Flag = "Theme",
+	Callback = function(opt) Window:SetTheme(opt[1]) end
+})
 
-SettingsTab:CreateButton({Name = "Exit Gui", Callback = function()
+SettingsTab:CreateSection("Exit")
+SettingsTab:CreateButton({Name = "Exit Hub", Callback = function()
 	getgenv().scriptRunning = false
-	if CoreGui:FindFirstChild("FF") then CoreGui:FindFirstChild("FF"):Destroy() end
+	-- Stop all farms
+	ffarm = false; bfarm = false; dfarm = false; lfarm = false; pESP = false
+	plants = {}; plantNames = {}; loweredPlantNames = {}
+	-- Reset humanoid
+	pcall(function()
+		local hum = speaker.Character:FindFirstChildWhichIsA("Humanoid")
+		if hum then hum.WalkSpeed=16; hum.JumpPower=50; hum.MaxSlopeAngle=89 end
+		Workspace.Gravity = 196.2
+		NOFLY()
+		if Noclipping then Noclipping:Disconnect() end
+	end)
+	-- Clean ESPs
+	for _, v in pairs(spawnersFolder:GetDescendants()) do
+		if v.Name == "PlantBoxHandleAdornment" or v.Name == "PlantBeam" then v:Destroy() end
+	end
 	Rayfield:Destroy()
 end})
 
--- ===================== FLY FUNCTIONS (COMPLETE) =====================
+-- ===================== FLY FUNCTIONS =====================
 function sFLY()
 	repeat task.wait() until speaker.Character and speaker.Character:FindFirstChild("HumanoidRootPart")
+	if flyKeyDown then flyKeyDown:Disconnect() end
+	if flyKeyUp then flyKeyUp:Disconnect() end
+
 	local T = speaker.Character.HumanoidRootPart
-	local CONTROL = {F=0,B=0,L=0,R=0,Q=0,E=0}
-	local lCONTROL = {F=0,B=0,L=0,R=0,Q=0,E=0}
+	local CONTROL = {F=0,B=0,L=0,R=0}
 	local SPEED = 0
 	local BG = Instance.new("BodyGyro")
 	local BV = Instance.new("BodyVelocity")
@@ -515,42 +969,55 @@ function sFLY()
 	BV.Parent = T
 	FLYING = true
 
-	Mouse.KeyDown:Connect(function(KEY)
+	local hum = speaker.Character:FindFirstChildOfClass("Humanoid")
+	if hum then hum.PlatformStand = true end
+
+	flyKeyDown = Mouse.KeyDown:Connect(function(KEY)
 		KEY = KEY:lower()
-		if KEY == "w" then CONTROL.F = iyflyspeed
-		elseif KEY == "s" then CONTROL.B = -iyflyspeed
-		elseif KEY == "a" then CONTROL.L = -iyflyspeed
-		elseif KEY == "d" then CONTROL.R = iyflyspeed
+		if     KEY=="w" then CONTROL.F = iyflyspeed
+		elseif KEY=="s" then CONTROL.B = -iyflyspeed
+		elseif KEY=="a" then CONTROL.L = -iyflyspeed
+		elseif KEY=="d" then CONTROL.R = iyflyspeed
 		end
 	end)
-
-	Mouse.KeyUp:Connect(function(KEY)
+	flyKeyUp = Mouse.KeyUp:Connect(function(KEY)
 		KEY = KEY:lower()
-		if KEY == "w" then CONTROL.F = 0
-		elseif KEY == "s" then CONTROL.B = 0
-		elseif KEY == "a" then CONTROL.L = 0
-		elseif KEY == "d" then CONTROL.R = 0
+		if     KEY=="w" then CONTROL.F=0
+		elseif KEY=="s" then CONTROL.B=0
+		elseif KEY=="a" then CONTROL.L=0
+		elseif KEY=="d" then CONTROL.R=0
 		end
 	end)
 
 	task.spawn(function()
 		repeat task.wait()
-			if CONTROL.L + CONTROL.R ~= 0 or CONTROL.F + CONTROL.B ~= 0 or CONTROL.Q + CONTROL.E ~= 0 then
-				SPEED = 50
-			elseif SPEED ~= 0 then SPEED = 0 end
-			BV.velocity = ((Workspace.CurrentCamera.CoordinateFrame.lookVector * (CONTROL.F + CONTROL.B)) + ((Workspace.CurrentCamera.CoordinateFrame * CFrame.new(CONTROL.L + CONTROL.R, (CONTROL.F + CONTROL.B + CONTROL.Q + CONTROL.E) * 0.2, 0).Position) - Workspace.CurrentCamera.CoordinateFrame.Position)) * SPEED
+			iyflyspeed = flyspeed
+			if CONTROL.L+CONTROL.R ~= 0 or CONTROL.F+CONTROL.B ~= 0 then SPEED=50 else SPEED=0 end
+			BV.velocity = (
+				(Workspace.CurrentCamera.CoordinateFrame.lookVector * (CONTROL.F+CONTROL.B))
+				+ ((Workspace.CurrentCamera.CoordinateFrame * CFrame.new(CONTROL.L+CONTROL.R,0,0).Position)
+				   - Workspace.CurrentCamera.CoordinateFrame.Position)
+			) * SPEED
 			BG.CFrame = Workspace.CurrentCamera.CoordinateFrame
 		until not FLYING
 		BG:Destroy()
 		BV:Destroy()
+		local h2 = speaker.Character and speaker.Character:FindFirstChildOfClass("Humanoid")
+		if h2 then h2.PlatformStand = false end
 	end)
 end
 
 function NOFLY()
 	FLYING = false
+	if flyKeyDown then flyKeyDown:Disconnect() end
+	if flyKeyUp then flyKeyUp:Disconnect() end
+	local hum = speaker.Character and speaker.Character:FindFirstChildOfClass("Humanoid")
+	if hum then hum.PlatformStand = false end
 end
 
--- ===================== AUTOFARM LOOPS (FULL ORIGINAL LOGIC) =====================
+-- ===================== MAIN LOOPS =====================
+
+-- Stats + basic logic loop
 task.spawn(function()
 	while getgenv().scriptRunning do
 		task.wait()
@@ -561,61 +1028,177 @@ task.spawn(function()
 			hum.JumpPower = jumppower
 		end
 		Workspace.Gravity = gravity
+	end
+end)
 
+-- AutoFarm loop (Firefly, Bird Nest, Deli)
+task.spawn(function()
+	while getgenv().scriptRunning do
+		task.wait()
+
+		-- Firefly
 		if ffarm then
 			local fly = Workspace.Fireflies:FindFirstChild("FireflyServer")
 			if fly then gotofirefly(fly) end
+			task.wait(0.1)
 		end
 
-		if bfarm then
-			if Workspace.Spawners.Island:FindFirstChild("Spawner_BirdsNest") and Workspace.Spawners.Island:FindFirstChild("Spawner_BirdsNest"):FindFirstChild("Collectible") then
-				goto(Workspace.Spawners.Island:FindFirstChild("Spawner_BirdsNest").Collectible:FindFirstChildWhichIsA("BasePart").Position)
-				Workspace.Spawners.Island:FindFirstChild("Spawner_BirdsNest").Collectible.InteractEvent:FireServer()
-			end
-		end
-
+		-- Deli
 		if dfarm then
-			-- Deli autofarm logic (original)
-			workspace.Deli.Booth1.InteractEvent:FireServer()
-			-- (short/long wait logic as in original)
+			sitAtDeliBooth()
+			hideNotifications()
+			ringBell()
+			hideDialogs()
+			skipInitialDeliDialog()
+			pcall(function()
+				if Workspace.Deli.Booth1:FindFirstChild("WaiterLocation") then
+					if shortwait then
+						Workspace.Deli.Booth1.WaiterLocation.Dialog1.D.D1.D1.D1.C1.D1.E.RE1:FireServer()
+						hideDialogs()
+					elseif longwait then
+						Workspace.Deli.Booth1.WaiterLocation.Dialog1.D.D1.D1.D1.C2.D1.E.RE2:FireServer()
+						hideDialogs()
+					elseif randomboth then
+						task.wait(0.05)
+						Workspace.Deli.Booth1.WaiterLocation.Dialog1.D.D1.D1.D1.C2.D1.E.RE2:FireServer()
+						hideDialogs()
+						task.wait(0.05)
+						Workspace.Deli.Booth1.WaiterLocation.Dialog1.D.D1.D1.D1.C1.D1.E.RE1:FireServer()
+						hideDialogs()
+						task.wait(0.05)
+					end
+				end
+			end)
 		end
 
-		if lfarm then
-			-- Lost autofarm logic (original)
+		-- Bird Nest
+		if bfarm then
+			local birdSpawner = Workspace.Spawners.Island:FindFirstChild("Spawner_BirdsNest")
+			if birdSpawner then
+				if birdSpawner:FindFirstChild("Collectible") then
+					local part = birdSpawner.Collectible:FindFirstChildWhichIsA("BasePart")
+					if part then
+						if notif.birdnest then Rayfield:Notify({Title="Bird Nests", Content="Nest found! Collecting...", Duration=3}) end
+						goto(part.Position)
+						task.wait(0.05)
+						birdSpawner.Collectible.InteractEvent:FireServer()
+						for i = 0, 50 do
+							ReplicatedStorage.Events.OpenSlot:FireServer(i)
+						end
+						task.wait(3)
+					else
+						if notif.birdnest then Rayfield:Notify({Title="Bird Nests", Content="Nest not loaded. Moving to spawn...", Duration=3}) end
+						for i = 0, 50 do ReplicatedStorage.Events.OpenSlot:FireServer(i) end
+						local spawnBrick = birdSpawner.SpawnLocations:FindFirstChild("SpawnBrick")
+						if spawnBrick then
+							birdSpawner.SpawnLocations.SpawnBrick.Name = "lol"
+							goto(birdSpawner.SpawnLocations:FindFirstChild("lol").Position + Vector3.new(0,10,0))
+						end
+						task.wait(3)
+					end
+				else
+					task.wait(3)
+				end
+			end
 		end
 	end
 end)
 
+-- Lost AutoFarm loop
+task.spawn(function()
+	while getgenv().scriptRunning do
+		task.wait()
+		if lfarm then
+			amountEmptyInventory = 20
+			task.wait(0.3)
+			for i = 0, 100, 10 do
+				task.wait()
+				pcall(function()
+					Workspace.Guttermouth["Door_GuttermouthPhantom (Hidden Key)"].InteractEvent:FireServer(true)
+				end)
+			end
+			task.wait(4.5)
+			pcall(function()
+				for _, v in pairs(Workspace.Guttermouth.GuttermouthRoom4.Monsters:GetChildren()) do
+					if v and v:FindFirstChild("Humanoid") then v.Humanoid.Health = 0 end
+				end
+			end)
+			task.wait(4)
+			goto(Vector3.new(12546,252,-2359))
+			repeat task.wait() until Workspace:FindFirstChild("GuttermouthChest")
+			pcall(function() Workspace.Guttermouth.GuttermouthRoom4.ClaimRewards:InvokeServer(true) end)
+			task.wait(0.5)
+			if Workspace:FindFirstChild("GuttermouthChest") then
+				Workspace.GuttermouthChest:Destroy()
+			end
+			goto(Vector3.new(12529,252,-2350))
+			-- Count empty slots
+			pcall(function()
+				local invFrame = Players.LocalPlayer.PlayerGui.Container.Main["INV_SF"]
+				for _, v in pairs(invFrame:GetDescendants()) do
+					if v.Name == "HoverText" and v.Value ~= "" then
+						amountEmptyInventory = amountEmptyInventory - 1
+					end
+				end
+			end)
+			if amountEmptyInventory <= 0 then
+				task.wait(1)
+				goto(Vector3.new(713,228,-483))
+				for i = 0, 10 do sellLostItems() task.wait(0.3) end
+				task.wait(1)
+				amountEmptyInventory = 20
+				goto(Vector3.new(12524,252,-2349))
+				for i = 0, 100, 10 do
+					task.wait(0.01)
+					pcall(function() Workspace.Guttermouth.GuttermouthRoom4.GutterExit.InteractEvent:FireServer(true) end)
+				end
+				task.wait(1)
+			end
+			for i = 0, 100, 10 do
+				task.wait()
+				pcall(function() Workspace.Guttermouth.GuttermouthRoom4.GutterExit.InteractEvent:FireServer(true) end)
+			end
+			task.wait(0.3)
+		end
+	end
+end)
+
+-- Plant ESP loop
 task.spawn(function()
 	while getgenv().scriptRunning do
 		task.wait(1)
-		if pESP then
-			for _, v in pairs(Workspace.Spawners:GetDescendants()) do
-				if v.Name == "Item" and v:IsA("IntValue") and table.find(plants, v.Value) then
-					local hitbox = v.Parent.Parent:FindFirstChild("HitBox")
-					if hitbox then
-						if not hitbox:FindFirstChild("PlantBoxHandleAdornment") then
-							local adorn = Instance.new("BoxHandleAdornment")
-							adorn.Name = "PlantBoxHandleAdornment"
-							adorn.Adornee = hitbox
-							adorn.AlwaysOnTop = true
-							adorn.ZIndex = 0
-							adorn.Size = hitbox.Size + Vector3.new(2,2,2)
-							adorn.Transparency = 0.3
-							adorn.Color3 = Color3.fromRGB(0,255,128)
-							adorn.Parent = hitbox
-						end
-						if not hitbox:FindFirstChild("PlantBeam") then
-							local beam = Instance.new("Beam")
-							beam.Name = "PlantBeam"
-							beam.Color = ColorSequence.new(Color3.fromRGB(0,255,128))
-							beam.Width0 = 0.1
-							beam.Width1 = 0.1
-							local att0 = Instance.new("Attachment", speaker.Character.HumanoidRootPart)
-							local att1 = Instance.new("Attachment", hitbox)
-							beam.Attachment0 = att0
-							beam.Attachment1 = att1
-							beam.Parent = hitbox
+		if pESP and #plants > 0 then
+			for _, v in pairs(spawnersFolder:GetDescendants()) do
+				if v and v:IsA("IntValue") and v.Name == "Item" and v.Parent and v.Parent.Name == "Info" then
+					if table.find(plants, tonumber(v.Value)) then
+						local plantModel = v.Parent.Parent
+						local hitbox = plantModel:FindFirstChild("HitBox")
+						if hitbox then
+							if not hitbox:FindFirstChild("PlantBoxHandleAdornment") then
+								local adorn = Instance.new("BoxHandleAdornment")
+								adorn.Name = "PlantBoxHandleAdornment"
+								adorn.Adornee = hitbox
+								adorn.AlwaysOnTop = true
+								adorn.ZIndex = 0
+								adorn.Size = hitbox.Size + Vector3.new(2,2,2)
+								adorn.Transparency = 0.3
+								adorn.Color3 = Color3.fromRGB(0,255,128)
+								adorn.Parent = hitbox
+							end
+							if not hitbox:FindFirstChild("PlantBeam") then
+								local beam = Instance.new("Beam")
+								beam.Name = "PlantBeam"
+								beam.Color = ColorSequence.new(Color3.fromRGB(0,255,128))
+								beam.Width0 = 0.1
+								beam.Width1 = 0.1
+								local att0 = Instance.new("Attachment")
+								att0.Parent = speaker.Character:WaitForChild("HumanoidRootPart")
+								local att1 = Instance.new("Attachment")
+								att1.Parent = hitbox
+								beam.Attachment0 = att0
+								beam.Attachment1 = att1
+								beam.Parent = hitbox
+							end
 						end
 					end
 				end
@@ -624,4 +1207,8 @@ task.spawn(function()
 	end
 end)
 
-Rayfield:Notify({Title = "FF Hub", Content = "✅ FULLY FIXED & COMPLETE!\nAll features from your original script are now working.", Duration = 8})
+Rayfield:Notify({
+	Title   = "FF Hub",
+	Content = "✅ All features loaded!\nPresent Finder is active.",
+	Duration = 6
+})

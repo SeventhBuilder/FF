@@ -1,6 +1,5 @@
 -- ============================================================
---  FF Hub
---  Original by SeventhBuilder
+--  FF Hub  |  Original by SeventhBuilder  |  Improved
 -- ============================================================
 
 local RunService        = game:GetService("RunService")
@@ -12,14 +11,14 @@ local StarterGui        = game:GetService("StarterGui")
 local Lighting          = game:GetService("Lighting")
 
 -- Anti-SimpleSpy
-for _, descendant in pairs(CoreGui:GetDescendants()) do
-	if descendant.Name == "SimpleSpy2" then
-		descendant:Destroy()
+for _, d in pairs(CoreGui:GetDescendants()) do
+	if d.Name == "SimpleSpy2" then
+		d:Destroy()
 		Players.LocalPlayer:Kick("Unstable connection detected")
 	end
 end
 
--- Destroy previous instance if re-running
+-- Clean previous session
 if CoreGui:FindFirstChild("RayfieldLibrary") then
 	CoreGui:FindFirstChild("RayfieldLibrary"):Destroy()
 end
@@ -30,44 +29,78 @@ getgenv().scriptRunning = true
 local speaker = Players.LocalPlayer
 local Mouse   = speaker:GetMouse()
 
--- ===================== STATE VARIABLES =====================
-local walkspeed = 18
-local jumppower = 81.5
-local gravity   = Workspace.Gravity
-local sangle    = 56
-local flyspeed  = 1
-local iyflyspeed = flyspeed
+-- =====================================================================
+-- STATE VARIABLES
+-- =====================================================================
+local walkspeed  = 18
+local jumppower  = 81.5
+local gravity    = Workspace.Gravity
+local sangle     = 56
+local flyspeed   = 1
+local iyflyspeed = 1
 
-local ffarm   = false
-local bfarm   = false
-local dfarm   = false
-local lfarm   = false
-local longwait  = false
-local shortwait = false
+-- Farm flags
+local ffarm      = false
+local bfarm      = false
+local dfarm      = false
+local lfarm      = false
+local longwait   = false
+local shortwait  = false
 local randomboth = true
 local amountEmptyInventory = 20
 
-local notif = {
-	present  = true,
-	frog     = true,
-	cosmic   = true,
-	gambler  = true,
-	firefly  = true,
-	birdnest = true,
-}
-
-local pESP = false
-local plants          = {}
-local plantNames      = {}
-local loweredPlantNames = {}
-
+-- Noclip / Fly
 local Clip       = false
 local Noclipping = nil
 local FLYING     = false
 local flyKeyDown, flyKeyUp
 
--- ===================== GOTO =====================
-local function goto(pos)
+-- ESP toggles
+local espToggles = {
+	plants    = false,
+	frog      = false,
+	strangeman = false,
+	rabbithole = false,
+	pitfall    = false,
+}
+
+-- Notification toggles
+local notif = {
+	present    = true,
+	frog       = true,
+	cosmic     = true,
+	gambler    = true,
+	firefly    = true,
+	birdnest   = true,
+	strangeman = true,
+	rabbithole = true,
+	pitfall    = true,
+}
+
+-- Auto-collect toggles
+local autoCollect = {
+	present = false,
+	frog    = false,
+}
+
+-- Plant ESP
+local plants           = {}
+local plantNames       = {}
+local loweredPlantNames = {}
+
+-- Shops
+local shopPositionCache = {}
+local selectedShopName  = nil
+local watchedShopItems  = {}
+local shopWatchEnabled  = false
+
+-- Night events (reset each night)
+local nightESPParts = {}   -- parts we've added ESP to this night
+
+-- =====================================================================
+-- TELEPORT (renamed from goto to avoid Lua keyword conflict)
+-- =====================================================================
+local function teleportTo(pos)
 	repeat task.wait() until speaker.Character and speaker.Character:FindFirstChild("HumanoidRootPart")
 	if not Workspace.HOLE:FindFirstChild("HoleTPEntrance") then
 		repeat
@@ -85,14 +118,14 @@ local function goto(pos)
 	else
 		local hole = Workspace.HOLE.HoleTPEntrance
 		local oPos, oSize = hole.Position, hole.Size
-		hole.Size        = Vector3.new(1, 1, 1)
+		hole.Size         = Vector3.new(1, 1, 1)
 		hole.Transparency = 1
-		hole.CFrame      = hrp.CFrame
+		hole.CFrame       = hrp.CFrame
 		repeat hole.Position = hrp.Position task.wait() until (hole.Position - hrp.Position).Magnitude < 10
 		hole.Position = oPos
 		hole.Size     = oSize
 		repeat task.wait() until (hrp.Position - Vector3.new(430, 441, 102)).Magnitude < 10
-		for i = 1, 4 do
+		for _ = 1, 4 do
 			hrp.Anchored = true
 			hrp.CFrame   = CFrame.new(pos)
 			task.wait(0.1)
@@ -113,21 +146,74 @@ local function checkTP()
 	end
 end
 
--- ===================== GOTO FIREFLY =====================
-local function gotofirefly(firefly)
+-- =====================================================================
+-- ESP HELPERS
+-- =====================================================================
+local function addHighlightESP(adornee, fillColor, outlineColor, name)
+	if not adornee or adornee:FindFirstChild(name.."_HL") then return end
+	local hl = Instance.new("Highlight")
+	hl.Name               = name.."_HL"
+	hl.Adornee            = adornee
+	hl.FillColor          = fillColor   or Color3.fromRGB(0, 255, 128)
+	hl.OutlineColor       = outlineColor or Color3.fromRGB(0, 200, 100)
+	hl.FillTransparency   = 0.4
+	hl.OutlineTransparency = 0
+	hl.DepthMode          = Enum.HighlightDepthMode.AlwaysOnTop
+	hl.Parent             = adornee
+end
+
+local function addBillboardESP(part, text, color, name)
+	if not part or part:FindFirstChild(name.."_BB") then return end
+	local anchor       = Instance.new("Part")
+	anchor.Name        = name.."_BB"
+	anchor.Size        = Vector3.new(0.1, 0.1, 0.1)
+	anchor.Anchored    = true
+	anchor.CanCollide  = false
+	anchor.Transparency = 1
+	anchor.CFrame      = part.CFrame + Vector3.new(0, 3, 0)
+	anchor.Parent      = part
+
+	local bg              = Instance.new("BillboardGui", anchor)
+	bg.AlwaysOnTop        = true
+	bg.Size               = UDim2.new(0, 200, 0, 50)
+	bg.StudsOffset        = Vector3.new(0, 2, 0)
+
+	local lbl                    = Instance.new("TextLabel", bg)
+	lbl.BackgroundTransparency   = 1
+	lbl.Size                     = UDim2.new(1, 0, 1, 0)
+	lbl.Font                     = Enum.Font.GothamBold
+	lbl.TextSize                 = 16
+	lbl.Text                     = text
+	lbl.TextColor3               = color or Color3.fromRGB(255, 255, 255)
+	lbl.TextStrokeTransparency   = 0.3
+	lbl.TextStrokeColor3         = Color3.new(0, 0, 0)
+end
+
+local function removeESPFromPart(part, name)
+	if not part then return end
+	local hl = part:FindFirstChild(name.."_HL")
+	if hl then hl:Destroy() end
+	local bb = part:FindFirstChild(name.."_BB")
+	if bb then bb:Destroy() end
+end
+
+-- =====================================================================
+-- GOTO FIREFLY
+-- =====================================================================
+local function teleportToFirefly(firefly)
 	local hrp = speaker.Character and speaker.Character:FindFirstChild("HumanoidRootPart")
 	if not hrp then return end
 	checkTP()
 	local hole = Workspace.HOLE.HoleTPEntrance
 	if (hrp.Position - firefly.Position).Magnitude >= 200 then
-		hole.Size        = Vector3.new(1, 1, 1)
+		hole.Size         = Vector3.new(1, 1, 1)
 		hole.Transparency = 1
-		hole.CFrame      = hrp.CFrame
+		hole.CFrame       = hrp.CFrame
 		repeat hole.Position = hrp.Position task.wait() until (hole.Position - hrp.Position).Magnitude < 10
 		hole.Position = Vector3.new(1318, 85, -527)
 		hole.Size     = Vector3.new(14, 5, 17)
 		repeat task.wait() until (hrp.Position - Vector3.new(430, 441, 102)).Magnitude < 10
-		for i = 1, 5 do
+		for _ = 1, 5 do
 			hrp.Anchored = true
 			hrp.CFrame   = firefly.CFrame + Vector3.new(0, 3, 0)
 			task.wait(0.1)
@@ -143,16 +229,16 @@ local function gotofirefly(firefly)
 			hrp.CFrame   = firefly.CFrame + Vector3.new(0, 3, 0)
 			hrp.Anchored = false
 			task.wait()
-			if firefly:FindFirstChild("CollectEvent") then
-				firefly.CollectEvent:FireServer()
-			end
+			if firefly:FindFirstChild("CollectEvent") then firefly.CollectEvent:FireServer() end
 			task.wait(0.08)
 		until firefly.Parent == nil
 	end
 	if hrp then hrp.Anchored = false end
 end
 
--- ===================== DELI HELPERS =====================
+-- =====================================================================
+-- DELI HELPERS
+-- =====================================================================
 local function ringBell()
 	pcall(function()
 		ReplicatedStorage.Events.Deli:FireServer("RingBell")
@@ -181,27 +267,27 @@ local function hideDialogs()
 	task.wait()
 end
 local function skipInitialDeliDialog()
-	pcall(function()
-		Workspace.Deli.Booth1.WaiterLocation.Dialog2.D.D1.D1.E.RE1:FireServer()
-	end)
+	pcall(function() Workspace.Deli.Booth1.WaiterLocation.Dialog2.D.D1.D1.E.RE1:FireServer() end)
 	task.wait()
 end
 
--- ===================== SELL LOST ITEMS =====================
+-- =====================================================================
+-- SELL LOST ITEMS
+-- =====================================================================
 local LOST_ITEM_IDS = {
 	982,2223,2224,2225,2276,2228,2229,825,2233,2239,2240,2241,
 	2280,2246,2247,2249,2250,2251,2252,2254,2256,2257,2258,203,
-	2260,2261,2262,1435,205,407
+	2260,2261,2262,1435,205,407,
 }
 local function sellLostItems()
 	for _, id in pairs(LOST_ITEM_IDS) do
-		pcall(function()
-			ReplicatedStorage.Events.SellShop:FireServer(id, Workspace.Shops.Sellers, 1)
-		end)
+		pcall(function() ReplicatedStorage.Events.SellShop:FireServer(id, Workspace.Shops.Sellers, 1) end)
 	end
 end
 
--- ===================== TELEPORT TABLES =====================
+-- =====================================================================
+-- TELEPORT TABLES
+-- =====================================================================
 local OVERWORLD_TP = {
 	["A Frontier Of Dragons"]       = Vector3.new(1184,91,-2823),
 	["Abandoned Orchard"]           = Vector3.new(271,88,-1840),
@@ -243,6 +329,7 @@ local OVERWORLD_TP = {
 	["Twinkling Meadow"]            = Vector3.new(92,73,-752),
 	["Upper Island"]                = Vector3.new(-1361,35,-2278),
 }
+
 local RATBOY_TP = {
 	["Back of The Theatre"]    = Vector3.new(7799,172,-3629),
 	["Blue Button"]            = Vector3.new(7285,172,-2549),
@@ -284,6 +371,7 @@ local RATBOY_TP = {
 	["Yellow Button"]          = Vector3.new(8510,214,-1242),
 	["Yellow Door"]            = Vector3.new(7195,168,-1638),
 }
+
 local HOUSING_TP = {
 	["Black Tower (Celestial Field)"] = Vector3.new(1387,137,-3217),
 	["Boathouse (Long Coast)"]        = Vector3.new(-484,4,-1692),
@@ -293,54 +381,45 @@ local HOUSING_TP = {
 	["Two Story House (Topple Town)"] = Vector3.new(626,258,-552),
 	["White Tower (Quiet Field)"]     = Vector3.new(2092,121,-458),
 }
+
 local VENDOR_TP = {
 	["Amy Thistlewitch"] = Vector3.new(-2937,228,-665),
 	["Arbewhy"]          = Vector3.new(-2939,230,-1156),
 	["Archaeologist"]    = Vector3.new(1553,72,-1632),
 }
 
--- ===================== SHOP HELPERS =====================
-local shopPositionCache = {}  -- {shopName = Vector3}
-local selectedShopName  = nil
-local watchedShopItems  = {}  -- array of {id=number, name=string}
-local shopWatchEnabled  = false
-
--- Get all shop names that have a Slots folder
+-- =====================================================================
+-- SHOP HELPERS
+-- =====================================================================
 local function getShopNames()
 	local names = {}
 	if not Workspace:FindFirstChild("Shops") then return names end
 	for _, shop in pairs(Workspace.Shops:GetChildren()) do
-		if shop:FindFirstChild("Slots") then
-			table.insert(names, shop.Name)
-		end
+		if shop:FindFirstChild("Slots") then table.insert(names, shop.Name) end
 	end
+	table.sort(names)
 	return names
 end
 
--- Resolve a shop's world position for teleporting
 local function getShopPosition(shopName)
 	if shopPositionCache[shopName] then return shopPositionCache[shopName] end
-	local shopsFolder = Workspace:FindFirstChild("Shops")
-	if not shopsFolder then return nil end
-	local shop = shopsFolder:FindFirstChild(shopName)
+	local shops = Workspace:FindFirstChild("Shops")
+	if not shops then return nil end
+	local shop = shops:FindFirstChild(shopName)
 	if not shop then return nil end
 	local part = shop:FindFirstChildWhichIsA("BasePart", true)
-	if part then
-		shopPositionCache[shopName] = part.Position
-		return part.Position
-	end
+	if part then shopPositionCache[shopName] = part.Position return part.Position end
 	return nil
 end
 
--- Return a list of {name, price, id} for every item in one shop
 local function getShopItems(shopName)
-	local shopsFolder = Workspace:FindFirstChild("Shops")
-	if not shopsFolder then return {} end
-	local shop = shopsFolder:FindFirstChild(shopName)
+	local shops = Workspace:FindFirstChild("Shops")
+	if not shops then return {} end
+	local shop = shops:FindFirstChild(shopName)
 	if not shop or not shop:FindFirstChild("Slots") then return {} end
 	local result = {}
 	for _, slot in pairs(shop.Slots:GetChildren()) do
-		local itemSlot = slot:FindFirstChild("Item")
+		local itemSlot  = slot:FindFirstChild("Item")
 		local priceSlot = slot:FindFirstChild("Price")
 		if itemSlot then
 			local itemId = tonumber(itemSlot.Value)
@@ -348,9 +427,7 @@ local function getShopItems(shopName)
 			for _, info in pairs(ReplicatedStorage.ItemInfo:GetChildren()) do
 				if tonumber(info.Name) == itemId then
 					local fn = info:FindFirstChild("FullName")
-					if fn then
-						table.insert(result, {name = fn.Value, price = price, id = itemId})
-					end
+					if fn then table.insert(result, {name = fn.Value, price = price, id = itemId}) end
 					break
 				end
 			end
@@ -359,14 +436,12 @@ local function getShopItems(shopName)
 	return result
 end
 
--- Scan all shops for any item currently in watchedShopItems
--- Returns array of {itemName, shopName, price}
 local function findWatchedItemsInShops()
 	local found = {}
-	local shopsFolder = Workspace:FindFirstChild("Shops")
-	if not shopsFolder then return found end
+	local shops  = Workspace:FindFirstChild("Shops")
+	if not shops then return found end
 	for _, watched in pairs(watchedShopItems) do
-		for _, shop in pairs(shopsFolder:GetChildren()) do
+		for _, shop in pairs(shops:GetChildren()) do
 			if shop:FindFirstChild("Slots") then
 				for _, slot in pairs(shop.Slots:GetChildren()) do
 					local itemSlot  = slot:FindFirstChild("Item")
@@ -385,16 +460,13 @@ local function findWatchedItemsInShops()
 	return found
 end
 
--- Fire an OS notification with a "Teleport" button for a shop item
 local function notifyShopItem(itemName, shopName, price)
 	local bindable = Instance.new("BindableFunction")
 	bindable.OnInvoke = function()
 		local pos = getShopPosition(shopName)
 		if pos then
-			goto(pos + Vector3.new(0, 5, 0))
+			teleportTo(pos + Vector3.new(0, 5, 0))
 			Rayfield:Notify({Title="Teleported", Content="Arrived at "..shopName, Duration=3})
-		else
-			Rayfield:Notify({Title="Shops", Content="Could not find "..shopName.." position.", Duration=3})
 		end
 	end
 	StarterGui:SetCore("SendNotification", {
@@ -407,66 +479,140 @@ local function notifyShopItem(itemName, shopName, price)
 	})
 end
 
--- ===================== RAYFIELD INIT =====================
+-- =====================================================================
+-- NIGHT EVENT HELPERS  (Strangeman, Rabbithole, Pitfall)
+-- Each entrance changes position every night — we resolve dynamically.
+-- =====================================================================
+local NIGHT_EVENTS = {
+	{
+		key       = "strangeman",
+		label     = "👺 Strangeman",
+		icon      = "rbxassetid://0",
+		color     = Color3.fromRGB(180, 50, 255),
+		getEntrance = function()
+			local ok, result = pcall(function() return Workspace.SM.Door_SMEntrance end)
+			return ok and result or nil
+		end,
+	},
+	{
+		key       = "rabbithole",
+		label     = "🐇 Rabbit Hole",
+		icon      = "rbxassetid://0",
+		color     = Color3.fromRGB(255, 200, 0),
+		getEntrance = function()
+			local ok, result = pcall(function() return Workspace.RabbitholeEntrance end)
+			return ok and result or nil
+		end,
+	},
+	{
+		key       = "pitfall",
+		label     = "🕳 Pitfall",
+		icon      = "rbxassetid://0",
+		color     = Color3.fromRGB(255, 80, 0),
+		getEntrance = function()
+			local ok, result = pcall(function() return Workspace.PitfallEntrance end)
+			return ok and result or nil
+		end,
+	},
+}
+
+local function checkAndNotifyNightEvents()
+	for _, event in pairs(NIGHT_EVENTS) do
+		local entrance = event.getEntrance()
+		if entrance then
+			local part = entrance:IsA("BasePart") and entrance
+				or entrance:FindFirstChildWhichIsA("BasePart", true)
+
+			-- ESP
+			if espToggles[event.key] and part then
+				addHighlightESP(entrance, event.color, Color3.new(1,1,1), event.key)
+				addBillboardESP(part, event.label, event.color, event.key)
+				table.insert(nightESPParts, entrance)
+			end
+
+			-- Notification
+			if notif[event.key] then
+				local bindable = Instance.new("BindableFunction")
+				bindable.OnInvoke = function()
+					local tp = part or entrance:FindFirstChildWhichIsA("BasePart", true)
+					if tp then teleportTo(tp.Position + Vector3.new(0, 5, 0)) end
+				end
+				StarterGui:SetCore("SendNotification", {
+					Title    = event.label.." Available!",
+					Text     = "Entrance has appeared! Click to teleport.",
+					Duration = 20,
+					Callback = bindable,
+					Button1  = "Teleport",
+				})
+			end
+		end
+	end
+end
+
+-- Clean ESP from previous night
+local function clearNightESP()
+	for _, entrance in pairs(nightESPParts) do
+		if entrance and entrance.Parent then
+			for _, event in pairs(NIGHT_EVENTS) do
+				removeESPFromPart(entrance, event.key)
+			end
+		end
+	end
+	nightESPParts = {}
+end
+
+-- =====================================================================
+-- RAYFIELD INIT
+-- =====================================================================
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 
 local Window = Rayfield:CreateWindow({
-	Name             = "FF Hub",
-	LoadingTitle     = "FF Hub",
-	LoadingSubtitle  = "by SeventhBuilder",
-	Theme            = "Default",
+	Name                = "FF Hub",
+	LoadingTitle        = "FF Hub",
+	LoadingSubtitle     = "by SeventhBuilder",
+	Theme               = "Default",
+	DisableRayfieldPrompts = false,
 	ConfigurationSaving = {Enabled = true, FileName = "FFHub_Config"},
-	KeySystem        = false,
+	KeySystem           = false,
 })
 
-local PlayerTab    = Window:CreateTab("Player",    5012544693)
-local TeleportsTab = Window:CreateTab("Teleports", 5012543481)
 local FeaturesTab  = Window:CreateTab("Features",  5012544092)
 local AutoFarmTab  = Window:CreateTab("AutoFarm",  5012543246)
-local ESPTab       = Window:CreateTab("ESP",       5012543246)
+local TeleportsTab = Window:CreateTab("Teleports", 5012543481)
+local PlayerTab    = Window:CreateTab("Player",    5012544693)
 local ShopsTab     = Window:CreateTab("Shops",     5012544372)
 local SettingsTab  = Window:CreateTab("Settings",  5012544372)
 
 StarterGui:SetCore("SendNotification", {Title = "FF Hub", Text = "Loaded! by SeventhBuilder"})
 
--- ===================== PRESENT FINDER =====================
-local LatestPresent = nil
+-- NightBegin: refresh shops + check night events
+ReplicatedStorage.Events.NightBegin.OnClientEvent:Connect(function()
+	shopPositionCache = {}   -- force position re-resolve next morning
+	clearNightESP()
+	task.wait(2)             -- give workspace a moment to update entrances
+	checkAndNotifyNightEvents()
+	-- Also refresh shop viewer label if open
+	Rayfield:Notify({Title="🌙 Night Begun", Content="Shops refreshed. Night events checked.", Duration=5})
+end)
+
+-- =====================================================================
+-- PRESENT FINDER
+-- =====================================================================
+local LatestPresent     = nil
+local LatestPresentModel = nil
 
 local function markPresent(part)
-	if part:FindFirstChild("parttrace") then return end
-	local epic        = Instance.new("Part")
-	epic.Name         = "parttrace"
-	epic.Parent       = part
-	epic.Position     = part.Position
-	epic.Size         = Vector3.new(0.3, 0.3, 0.3)
-	epic.Anchored     = true
-	epic.Transparency = 1
-	epic.CanCollide   = false
-	local billgui          = Instance.new("BillboardGui", epic)
-	billgui.Name           = "ESP"
-	billgui.Adornee        = epic
-	billgui.AlwaysOnTop    = true
-	billgui.ExtentsOffset  = Vector3.new(0, 1, 0)
-	billgui.Size           = UDim2.new(0, 200, 0, 50)
-	local textlab                  = Instance.new("TextLabel", billgui)
-	textlab.BackgroundTransparency = 1
-	textlab.Size                   = UDim2.new(1, 0, 1, 0)
-	textlab.Font                   = Enum.Font.GothamBold
-	textlab.TextSize               = 18
-	textlab.Text                   = "🎁 PRESENT"
-	textlab.TextColor3             = Color3.fromRGB(255, 80, 80)
-	textlab.TextStrokeTransparency = 0.4
-	textlab.TextStrokeColor3       = Color3.new(0, 0, 0)
-	textlab.ZIndex                 = 10
+	if part:FindFirstChild("PresentESP_BB") then return end
+	addBillboardESP(part, "🎁 PRESENT", Color3.fromRGB(255, 80, 80), "PresentESP")
 end
 
 local presentBindable = Instance.new("BindableFunction")
 presentBindable.OnInvoke = function()
 	if LatestPresent and LatestPresent.Parent then
-		goto(LatestPresent.Position)
-		Rayfield:Notify({Title = "Teleported!", Content = "Arrived at present.", Duration = 3})
+		teleportTo(LatestPresent.Position)
+		Rayfield:Notify({Title="Teleported!", Content="Arrived at present.", Duration=3})
 	else
-		Rayfield:Notify({Title = "Error", Content = "Present no longer exists.", Duration = 3})
+		Rayfield:Notify({Title="Error", Content="Present no longer exists.", Duration=3})
 	end
 end
 
@@ -475,115 +621,184 @@ local function onPresentFound(present)
 	local part = present:FindFirstChildOfClass("Part")
 	if not part then return end
 	markPresent(part)
-	LatestPresent = part
+	LatestPresent      = part
+	LatestPresentModel = present
+
 	if notif.present then
 		StarterGui:SetCore("SendNotification", {
 			Title    = "🎁 Present Found!",
 			Text     = "A new present has spawned!",
 			Icon     = "rbxassetid://1053360438",
-			Duration = 8,
+			Duration = 10,
 			Callback = presentBindable,
 			Button1  = "Teleport to Present",
 		})
 	end
+
+	-- Auto-collect: teleport + spam InteractEvent
+	if autoCollect.present then
+		task.spawn(function()
+			teleportTo(part.Position)
+			task.wait(0.3)
+			local attempts = 0
+			repeat
+				pcall(function()
+					-- Try direct InteractEvent on the model
+					local ie = present:FindFirstChild("InteractEvent")
+					        or present:FindFirstChildOfClass("RemoteEvent")
+					if ie then ie:FireServer() end
+				end)
+				task.wait(0.1)
+				attempts += 1
+			until not present.Parent or not autoCollect.present or attempts > 100
+		end)
+	end
 end
 
 for _, child in pairs(Workspace:GetChildren()) do
-	if string.sub(string.lower(child.Name), 1, 7) == "present" and string.len(child.Name) == 8 then
+	if string.sub(string.lower(child.Name), 1, 7) == "present" and #child.Name == 8 then
 		task.spawn(onPresentFound, child)
 	end
 end
 Workspace.ChildAdded:Connect(function(child)
-	if string.sub(string.lower(child.Name), 1, 7) == "present" and string.len(child.Name) == 8 then
+	if string.sub(string.lower(child.Name), 1, 7) == "present" and #child.Name == 8 then
 		task.spawn(onPresentFound, child)
 	end
 end)
 
--- ===================== FEATURES TAB =====================
-FeaturesTab:CreateSection("Present Finder")
+-- =====================================================================
+-- FEATURES TAB
+-- =====================================================================
+
+-- ── Present Finder ──────────────────────────────────────────────────
+FeaturesTab:CreateSection("🎁 Present Finder")
+
 FeaturesTab:CreateToggle({
 	Name = "Present Notifications", CurrentValue = true, Flag = "PresentNotif",
 	Callback = function(v)
 		notif.present = v
 		Rayfield:Notify({Title="Present Finder", Content=v and "Notifications ON" or "Notifications OFF", Duration=3})
-	end
+	end,
+})
+FeaturesTab:CreateToggle({
+	Name = "Auto Collect Present", CurrentValue = false, Flag = "PresentAutoCollect",
+	Callback = function(v)
+		autoCollect.present = v
+		Rayfield:Notify({Title="Present Finder", Content=v and "Auto-collect ON" or "Auto-collect OFF", Duration=3})
+	end,
 })
 FeaturesTab:CreateButton({
 	Name = "Teleport to Latest Present",
 	Callback = function()
 		if LatestPresent and LatestPresent.Parent then
-			goto(LatestPresent.Position)
+			teleportTo(LatestPresent.Position)
 			Rayfield:Notify({Title="Success", Content="Teleported to present!", Duration=3})
 		else
 			Rayfield:Notify({Title="No Present", Content="No present detected yet.", Duration=4})
 		end
-	end
+	end,
 })
 
-FeaturesTab:CreateSection("NPC Finders")
+-- ── NPC Finders ─────────────────────────────────────────────────────
+FeaturesTab:CreateSection("🐸 Grateful Frog")
+
 FeaturesTab:CreateToggle({
-	Name = "Frog Finder Notifications", CurrentValue = true, Flag = "FrogNotif",
+	Name = "Frog Notifications", CurrentValue = true, Flag = "FrogNotif",
 	Callback = function(v)
 		notif.frog = v
 		Rayfield:Notify({Title="Frog Finder", Content=v and "Notifications ON" or "Notifications OFF", Duration=3})
-	end
+	end,
 })
-FeaturesTab:CreateButton({Name = "Get Grateful Frog", Callback = function()
-	local spawner = Workspace.Spawners["The Sprutle Frog Expansion_Updated"]
-	if not spawner then
-		if notif.frog then Rayfield:Notify({Title="Frog Finder", Content="Frog spawner not found.", Duration=3}) end
-		return
-	end
+FeaturesTab:CreateToggle({
+	Name = "Auto Collect Frog", CurrentValue = false, Flag = "FrogAutoCollect",
+	Callback = function(v)
+		autoCollect.frog = v
+		Rayfield:Notify({Title="Frog Finder", Content=v and "Auto-collect ON (checks every 3s)" or "Auto-collect OFF", Duration=3})
+	end,
+})
+
+local function tryCollectFrog(silent)
+	local spawner = Workspace.Spawners:FindFirstChild("The Sprutle Frog Expansion_Updated")
+	if not spawner then return end
 	local frogSpawner = spawner:FindFirstChild("Spawner_GratefulFrogs")
-	if not frogSpawner then
-		if notif.frog then Rayfield:Notify({Title="Frog Finder", Content="No frog spawner.", Duration=3}) end
-		return
-	end
+	if not frogSpawner then return end
+
 	if frogSpawner:FindFirstChild("Collectible") then
 		local part = frogSpawner.Collectible:FindFirstChildWhichIsA("BasePart")
 		if part then
-			if notif.frog then Rayfield:Notify({Title="Frog Finder", Content="Frog found! Teleporting...", Duration=3}) end
-			goto(part.Position)
-			for p = 1, 50 do
+			-- ESP
+			if espToggles.frog then
+				addHighlightESP(frogSpawner.Collectible, Color3.fromRGB(0, 255, 80), Color3.fromRGB(0, 200, 60), "FrogESP")
+				addBillboardESP(part, "🐸 FROG", Color3.fromRGB(0, 255, 80), "FrogESP")
+			end
+			if not silent and notif.frog then
+				Rayfield:Notify({Title="Frog Finder", Content="Frog found! Teleporting...", Duration=3})
+			end
+			teleportTo(part.Position)
+			for _ = 1, 50 do
 				task.wait()
 				if frogSpawner:FindFirstChild("Collectible") and frogSpawner.Collectible:FindFirstChild("InteractEvent") then
 					frogSpawner.Collectible.InteractEvent:FireServer()
 				end
 			end
-			if notif.frog then Rayfield:Notify({Title="Frog Finder", Content="Collection attempt done!", Duration=3}) end
+			if not silent and notif.frog then
+				Rayfield:Notify({Title="Frog Finder", Content="Collection attempt done!", Duration=3})
+			end
 		else
-			if notif.frog then Rayfield:Notify({Title="Frog Finder", Content="Frog not loaded. Moving to spawn...", Duration=5}) end
+			-- Not loaded — nudge spawn to force load
+			if not silent and notif.frog then
+				Rayfield:Notify({Title="Frog Finder", Content="Frog not loaded. Moving to spawn...", Duration=4})
+			end
+			local tries = 0
 			repeat
 				local spawnBrick = frogSpawner.SpawnLocations:FindFirstChild("SpawnBrick")
 				if not spawnBrick then break end
-				goto(spawnBrick.Position + Vector3.new(0, 10, 0))
+				teleportTo(spawnBrick.Position + Vector3.new(0, 10, 0))
 				task.wait(0.5)
+				tries += 1
 			until frogSpawner.Collectible:FindFirstChildWhichIsA("BasePart")
 				or not frogSpawner.SpawnLocations:FindFirstChild("SpawnBrick")
-			if frogSpawner.Collectible:FindFirstChildWhichIsA("BasePart") then
-				goto(frogSpawner.Collectible:FindFirstChildWhichIsA("BasePart").Position)
-				for p = 1, 50 do
+				or tries > 20
+
+			local readyPart = frogSpawner.Collectible:FindFirstChildWhichIsA("BasePart")
+			if readyPart then
+				teleportTo(readyPart.Position)
+				for _ = 1, 50 do
 					task.wait()
 					if frogSpawner:FindFirstChild("Collectible") and frogSpawner.Collectible:FindFirstChild("InteractEvent") then
 						frogSpawner.Collectible.InteractEvent:FireServer()
 					end
 				end
-				if notif.frog then Rayfield:Notify({Title="Frog Finder", Content="Frog collected!", Duration=3}) end
+				if not silent and notif.frog then
+					Rayfield:Notify({Title="Frog Finder", Content="Frog collected!", Duration=3})
+				end
 			else
-				if notif.frog then Rayfield:Notify({Title="Frog Finder", Content="Frog failed to load.", Duration=4}) end
+				if not silent and notif.frog then
+					Rayfield:Notify({Title="Frog Finder", Content="Frog failed to load.", Duration=4})
+				end
 			end
 		end
 	else
-		if notif.frog then Rayfield:Notify({Title="Frog Finder", Content="No frog found.", Duration=3}) end
+		if not silent then
+			Rayfield:Notify({Title="Frog Finder", Content="No frog found right now.", Duration=3})
+		end
 	end
-end})
+end
+
+FeaturesTab:CreateButton({
+	Name = "Get Grateful Frog (Manual)",
+	Callback = function() task.spawn(tryCollectFrog, false) end,
+})
+
+-- ── NPC: Cosmic Ghost & Path Gambler ────────────────────────────────
+FeaturesTab:CreateSection("👻 NPCs")
 
 FeaturesTab:CreateToggle({
 	Name = "Cosmic Ghost Notifications", CurrentValue = true, Flag = "CosmicNotif",
 	Callback = function(v)
 		notif.cosmic = v
 		Rayfield:Notify({Title="Cosmic Ghost", Content=v and "Notifications ON" or "Notifications OFF", Duration=3})
-	end
+	end,
 })
 FeaturesTab:CreateButton({Name = "Check For Cosmic Ghost", Callback = function()
 	local npcs = Workspace:FindFirstChild("NPCS")
@@ -591,12 +806,12 @@ FeaturesTab:CreateButton({Name = "Check For Cosmic Ghost", Callback = function()
 		local part = npcs.CosmicFloatingMonsterHeadNPC:FindFirstChildWhichIsA("BasePart", true)
 		if part then
 			if notif.cosmic then Rayfield:Notify({Title="Cosmic Ghost", Content="Found! Teleporting...", Duration=3}) end
-			goto(part.Position + Vector3.new(10, 10, 10))
+			teleportTo(part.Position + Vector3.new(10, 10, 10))
 		else
-			if notif.cosmic then Rayfield:Notify({Title="Cosmic Ghost", Content="Found but not loaded. Move around Matumada.", Duration=5}) end
+			if notif.cosmic then Rayfield:Notify({Title="Cosmic Ghost", Content="Found but not loaded — move around Matumada.", Duration=5}) end
 		end
 	else
-		if notif.cosmic then Rayfield:Notify({Title="Cosmic Ghost", Content="Not found.", Duration=3}) end
+		if notif.cosmic then Rayfield:Notify({Title="Cosmic Ghost", Content="Not found in this server.", Duration=3}) end
 	end
 end})
 
@@ -605,7 +820,7 @@ FeaturesTab:CreateToggle({
 	Callback = function(v)
 		notif.gambler = v
 		Rayfield:Notify({Title="Path Gambler", Content=v and "Notifications ON" or "Notifications OFF", Duration=3})
-	end
+	end,
 })
 FeaturesTab:CreateButton({Name = "Check For Path Gambler", Callback = function()
 	local npcs = Workspace:FindFirstChild("NPCS")
@@ -613,46 +828,85 @@ FeaturesTab:CreateButton({Name = "Check For Path Gambler", Callback = function()
 		local part = npcs.PathGamblerNPC:FindFirstChildWhichIsA("BasePart", true)
 		if part then
 			if notif.gambler then Rayfield:Notify({Title="Path Gambler", Content="Found! Teleporting...", Duration=3}) end
-			goto(part.Position + Vector3.new(0, 4, 0))
+			teleportTo(part.Position + Vector3.new(0, 4, 0))
 		else
-			if notif.gambler then Rayfield:Notify({Title="Path Gambler", Content="Found but not loaded.", Duration=5}) end
+			if notif.gambler then Rayfield:Notify({Title="Path Gambler", Content="Found but not loaded — explore Ratboy's Nightmare.", Duration=5}) end
 		end
 	else
-		if notif.gambler then Rayfield:Notify({Title="Path Gambler", Content="Not found.", Duration=3}) end
+		if notif.gambler then Rayfield:Notify({Title="Path Gambler", Content="Not found in this server.", Duration=3}) end
 	end
 end})
 
-FeaturesTab:CreateSection("Performance")
+-- ── Night Events ─────────────────────────────────────────────────────
+FeaturesTab:CreateSection("🌙 Night Events  (Refresh Every Night)")
+
+-- Per-event notifier toggles + manual teleport buttons
+for _, event in pairs(NIGHT_EVENTS) do
+	local evKey   = event.key
+	local evLabel = event.label
+
+	FeaturesTab:CreateToggle({
+		Name = evLabel.." Notifications",
+		CurrentValue = true,
+		Flag = evKey.."Notif",
+		Callback = function(v)
+			notif[evKey] = v
+			Rayfield:Notify({Title=evLabel, Content=v and "Notifications ON" or "Notifications OFF", Duration=3})
+		end,
+	})
+	FeaturesTab:CreateButton({
+		Name = "Check / Teleport to "..evLabel,
+		Callback = function()
+			local entrance = event.getEntrance()
+			if entrance then
+				local part = entrance:IsA("BasePart") and entrance
+					or entrance:FindFirstChildWhichIsA("BasePart", true)
+				if part then
+					Rayfield:Notify({Title=evLabel, Content="Found! Teleporting...", Duration=3})
+					teleportTo(part.Position + Vector3.new(0, 5, 0))
+				else
+					Rayfield:Notify({Title=evLabel, Content="Entrance exists but no part found.", Duration=3})
+				end
+			else
+				Rayfield:Notify({Title=evLabel, Content="Not available right now (check during night).", Duration=4})
+			end
+		end,
+	})
+end
+
+FeaturesTab:CreateButton({
+	Name = "🔍 Check All Night Events Now",
+	Callback = function() task.spawn(checkAndNotifyNightEvents) end,
+})
+
+-- ── Performance ──────────────────────────────────────────────────────
+FeaturesTab:CreateSection("⚡ Performance")
+
 FeaturesTab:CreateButton({Name = "Remove All Trees", Callback = function()
-	local treeNames = {"PostTrees","Tree_A_1","Tree_B_1","Tree_B_2","Tree_C_1","Tree_D_1","Tree_D_2"}
+	local names = {"PostTrees","Tree_A_1","Tree_B_1","Tree_B_2","Tree_C_1","Tree_D_1","Tree_D_2"}
 	for _, obj in pairs(Workspace:GetDescendants()) do
-		for _, name in pairs(treeNames) do
-			if obj.Name == name then obj:Destroy() end
-		end
+		for _, n in pairs(names) do if obj.Name == n then obj:Destroy() end end
 	end
-	Rayfield:Notify({Title="Status", Content="All trees removed!", Duration=3})
+	Rayfield:Notify({Title="Performance", Content="Trees removed!", Duration=3})
 end})
 FeaturesTab:CreateButton({Name = "Remove All Vegetation", Callback = function()
-	local vegNames = {"GrassyRootSystemPart","BushLeafPart","LilyPadPart","FlowerPart","BushPart","CropPartSQ","GrassPart","TallGrassPartSmall","DeadShrubPart","PlantPart","Trunk","Root","Leaves","LeafPart","WeedPart"}
+	local names = {"GrassyRootSystemPart","BushLeafPart","LilyPadPart","FlowerPart","BushPart","CropPartSQ","GrassPart","TallGrassPartSmall","DeadShrubPart","PlantPart","Trunk","Root","Leaves","LeafPart","WeedPart"}
 	for _, obj in pairs(Workspace:GetDescendants()) do
-		for _, name in pairs(vegNames) do
-			if obj.Name == name then obj:Destroy() end
-		end
+		for _, n in pairs(names) do if obj.Name == n then obj:Destroy() end end
 		if obj:IsA("MeshPart") and obj.MeshId == "rbxassetid://511992639" then obj:Destroy() end
 	end
-	Rayfield:Notify({Title="Status", Content="All vegetation removed!", Duration=3})
+	Rayfield:Notify({Title="Performance", Content="Vegetation removed!", Duration=3})
 end})
 FeaturesTab:CreateButton({Name = "Remove All Rocks", Callback = function()
-	local rockNames = {"LargeRockPart","RockPart"}
 	for _, obj in pairs(Workspace:GetDescendants()) do
-		for _, name in pairs(rockNames) do
-			if obj.Name == name then obj:Destroy() end
-		end
+		if obj.Name == "LargeRockPart" or obj.Name == "RockPart" then obj:Destroy() end
 	end
-	Rayfield:Notify({Title="Status", Content="All rocks removed!", Duration=3})
+	Rayfield:Notify({Title="Performance", Content="Rocks removed!", Duration=3})
 end})
 
-FeaturesTab:CreateSection("Abilities")
+-- ── Abilities ────────────────────────────────────────────────────────
+FeaturesTab:CreateSection("🧰 Abilities")
+
 FeaturesTab:CreateButton({Name = "Remove Fog", Callback = function()
 	pcall(function()
 		if speaker.PlayerScripts:FindFirstChild("Fog") then speaker.PlayerScripts.Fog:Destroy() end
@@ -663,7 +917,7 @@ FeaturesTab:CreateButton({Name = "Remove Fog", Callback = function()
 			end
 		end
 	end)
-	Rayfield:Notify({Title="Status", Content="Fog removed!", Duration=3})
+	Rayfield:Notify({Title="Abilities", Content="Fog removed!", Duration=3})
 end})
 FeaturesTab:CreateButton({Name = "Faster Kills", Callback = function()
 	loadstring(game:HttpGet("https://raw.githubusercontent.com/SeventhBuilder/FF/main/scripts/faster-kills.lua"))()
@@ -672,17 +926,20 @@ FeaturesTab:CreateButton({Name = "Fast Regen Stamina", Callback = function()
 	loadstring(game:HttpGet("https://raw.githubusercontent.com/SeventhBuilder/FF/main/scripts/fast-regen-stamina.lua"))()
 end})
 FeaturesTab:CreateButton({Name = "Bring Spider Boss Closer", Callback = function()
-	loadstring(game:HttpGet("https://raw.githubusercontent.com/SeventhBuilder/FF/main/scripts/bring-spider-boss-closer-to-topple-town.lua"))()
+	loadstring(game:HttpGet("https://raw.githubusercontent.com/JustApstl/FF/refs/heads/main/scripts/bring-spider-boss-closer-to-topple-town.lua"))()
 end})
 FeaturesTab:CreateButton({Name = "Teleport to Uncollected Ratboy Token", Callback = function()
-	loadstring(game:HttpGet("https://raw.githubusercontent.com/SeventhBuilder/FF/main/scripts/teleport-to-uncollected-ratboy-token.lua"))()
+	loadstring(game:HttpGet("https://raw.githubusercontent.com/JustApstl/FF/refs/heads/main/scripts/teleport-to-uncollected-ratboy-token.lua"))()
 end})
 
--- ===================== AUTOFARM TAB =====================
-AutoFarmTab:CreateSection("Firefly Stones")
+-- =====================================================================
+-- AUTOFARM TAB
+-- =====================================================================
+
+AutoFarmTab:CreateSection("🪲 Firefly Stones")
 AutoFarmTab:CreateToggle({
 	Name = "Firefly Notifications", CurrentValue = true, Flag = "FireflyNotif",
-	Callback = function(v) notif.firefly = v end
+	Callback = function(v) notif.firefly = v end,
 })
 AutoFarmTab:CreateToggle({
 	Name = "Firefly Stones AutoFarm", CurrentValue = false, Flag = "FireflyFarm",
@@ -692,61 +949,60 @@ AutoFarmTab:CreateToggle({
 		if notif.firefly then
 			Rayfield:Notify({Title="AutoFarm", Content="Firefly Stones "..(v and "ENABLED" or "DISABLED"), Duration=3})
 		end
-	end
+	end,
 })
 
-AutoFarmTab:CreateSection("Bird Nests")
+AutoFarmTab:CreateSection("🪺 Bird Nests")
 AutoFarmTab:CreateToggle({
 	Name = "Bird Nest Notifications", CurrentValue = true, Flag = "BirdNotif",
-	Callback = function(v) notif.birdnest = v end
+	Callback = function(v) notif.birdnest = v end,
 })
 AutoFarmTab:CreateToggle({
 	Name = "Bird Nests AutoFarm", CurrentValue = false, Flag = "BirdFarm",
 	Callback = function(v)
 		bfarm = v
-		if v then goto(Vector3.new(-1405,325,-2271)) task.wait(1) checkTP() end
+		if v then teleportTo(Vector3.new(-1405,325,-2271)) task.wait(1) checkTP() end
 		Rayfield:Notify({Title="AutoFarm", Content="Bird Nests "..(v and "ENABLED" or "DISABLED"), Duration=3})
-	end
+	end,
 })
 
-AutoFarmTab:CreateSection("Deli")
+AutoFarmTab:CreateSection("🍔 Deli")
 AutoFarmTab:CreateDropdown({
 	Name = "Deli AutoFarm Mode",
-	Options = {"Both (Random)","Short Wait","Long Wait"},
+	Options = {"Both (Random)", "Short Wait", "Long Wait"},
 	CurrentOption = {"Both (Random)"}, Flag = "DeliMode",
 	Callback = function(opt)
-		local mode = opt[1]
-		shortwait  = mode == "Short Wait"
-		longwait   = mode == "Long Wait"
-		randomboth = mode == "Both (Random)"
+		local mode   = opt[1]
+		shortwait    = mode == "Short Wait"
+		longwait     = mode == "Long Wait"
+		randomboth   = mode == "Both (Random)"
 		Rayfield:Notify({Title="Deli", Content="Mode: "..mode, Duration=3})
-	end
+	end,
 })
 AutoFarmTab:CreateToggle({
 	Name = "Deli AutoFarm", CurrentValue = false, Flag = "DeliFarm",
 	Callback = function(v)
 		dfarm = v
-		if v then goto(Vector3.new(7066,144,-1621)) task.wait(3) end
+		if v then teleportTo(Vector3.new(7066,144,-1621)) task.wait(3) end
 		Rayfield:Notify({Title="AutoFarm", Content="Deli "..(v and "ENABLED" or "DISABLED"), Duration=3})
-	end
+	end,
 })
 
-AutoFarmTab:CreateSection("The Lost (Requires Hidden Key)")
+AutoFarmTab:CreateSection("💀 The Lost  (Requires Hidden Key — PATCHED)")
 AutoFarmTab:CreateToggle({
-	Name = "Lost AutoFarm (PATCHED)", CurrentValue = false, Flag = "LostFarm",
+	Name = "Lost AutoFarm", CurrentValue = false, Flag = "LostFarm",
 	Callback = function(v)
 		if v then
 			local hasKey = false
 			pcall(function()
-				local invFrame = Players.LocalPlayer.PlayerGui.Container.Main["INV_SF"]
-				for _, item in pairs(invFrame:GetDescendants()) do
+				for _, item in pairs(Players.LocalPlayer.PlayerGui.Container.Main["INV_SF"]:GetDescendants()) do
 					if item.Name == "ItemCode" and item.Value == 2025 then hasKey = true break end
 				end
 			end)
 			if hasKey then
 				amountEmptyInventory = 20
 				lfarm = true
-				goto(Vector3.new(5857,157,4907)) task.wait(1.5)
+				teleportTo(Vector3.new(5857,157,4907)) task.wait(1.5)
 				Rayfield:Notify({Title="AutoFarm", Content="Lost Farm ENABLED", Duration=3})
 			else
 				lfarm = false
@@ -756,13 +1012,16 @@ AutoFarmTab:CreateToggle({
 			lfarm = false; amountEmptyInventory = 20
 			Rayfield:Notify({Title="AutoFarm", Content="Lost Farm DISABLED", Duration=3})
 		end
-	end
+	end,
 })
 
--- ===================== TELEPORTS TAB =====================
-TeleportsTab:CreateSection("Overworld")
+-- =====================================================================
+-- TELEPORTS TAB
+-- =====================================================================
+
+TeleportsTab:CreateSection("🌍 Overworld")
 TeleportsTab:CreateDropdown({
-	Name = "Overworld Teleports",
+	Name = "Overworld Location",
 	Options = {
 		"A Frontier Of Dragons","Abandoned Orchard","Ancient Forest","Blackrock Mountain",
 		"Blue Ogre Camp","Celestial Field","Celestial Peak","Clamstack Cave","Coral Bay",
@@ -772,15 +1031,17 @@ TeleportsTab:CreateDropdown({
 		"Starry Point","Strangeman's Domain","The Deep Forest","The Forgotten Lands",
 		"The Long Coast","The Maze Wood","The Pits","The Quiet Field","The Rolling Road",
 		"The Spider's Nest","The Town of Right and Wrong","Topple Hill","Topple Lake",
-		"Topple Town","Twinkling Meadow","Upper Island"
+		"Topple Town","Twinkling Meadow","Upper Island",
 	},
-	CurrentOption = {""}, MultipleOptions = false,
-	Callback = function(opt) if OVERWORLD_TP[opt[1]] then goto(OVERWORLD_TP[opt[1]]) end end
+	CurrentOption = {""}, MultipleOptions = false, SearchEnabled = true,
+	Callback = function(opt)
+		if OVERWORLD_TP[opt[1]] then teleportTo(OVERWORLD_TP[opt[1]]) end
+	end,
 })
 
-TeleportsTab:CreateSection("Ratboy's Nightmare")
+TeleportsTab:CreateSection("👺 Ratboy's Nightmare")
 TeleportsTab:CreateDropdown({
-	Name = "Ratboy's Nightmare Teleports",
+	Name = "Ratboy Location",
 	Options = {
 		"Back of The Theatre","Blue Button","Blue Door","Cyan (Teal) Button","Cyan (Teal) Door",
 		"End of the Road","Fish Hall","Green Button","Green Door","Inside","Maze of the Root",
@@ -788,32 +1049,57 @@ TeleportsTab:CreateDropdown({
 		"Purple Button","Purple Door","Red Button","Red Door","The Back Area","The Ballroom",
 		"The Deli","The Grand Hall","The Hidden Library","The Library of Riddles","The Lost",
 		"The Mansion","The Old Cave","The Old Mansion","The Plant Room","The Road",
-		"The Supermarket","The Theatre","The Vault","Waiting Room","Yellow Button","Yellow Door"
+		"The Supermarket","The Theatre","The Vault","Waiting Room","Yellow Button","Yellow Door",
 	},
-	CurrentOption = {""}, MultipleOptions = false,
-	Callback = function(opt) if RATBOY_TP[opt[1]] then goto(RATBOY_TP[opt[1]]) end end
+	CurrentOption = {""}, MultipleOptions = false, SearchEnabled = true,
+	Callback = function(opt)
+		if RATBOY_TP[opt[1]] then teleportTo(RATBOY_TP[opt[1]]) end
+	end,
 })
 
-TeleportsTab:CreateSection("Housing & Vendors")
+TeleportsTab:CreateSection("🏠 Housing")
 TeleportsTab:CreateDropdown({
-	Name = "Housing Teleports",
+	Name = "Housing Location",
 	Options = {
 		"Black Tower (Celestial Field)","Boathouse (Long Coast)","Castle (Topple Town)",
-		"Ice Spire (Matumada)","Starter House (Topple Town)","Two Story House (Topple Town)",
-		"White Tower (Quiet Field)"
+		"Ice Spire (Matumada)","Starter House (Topple Town)",
+		"Two Story House (Topple Town)","White Tower (Quiet Field)",
 	},
-	CurrentOption = {""}, MultipleOptions = false,
-	Callback = function(opt) if HOUSING_TP[opt[1]] then goto(HOUSING_TP[opt[1]]) end end
-})
-TeleportsTab:CreateDropdown({
-	Name = "Vendor Teleports",
-	Options = {"Amy Thistlewitch","Arbewhy","Archaeologist"},
-	CurrentOption = {""}, MultipleOptions = false,
-	Callback = function(opt) if VENDOR_TP[opt[1]] then goto(VENDOR_TP[opt[1]]) end end
+	CurrentOption = {""}, MultipleOptions = false, SearchEnabled = true,
+	Callback = function(opt)
+		if HOUSING_TP[opt[1]] then teleportTo(HOUSING_TP[opt[1]]) end
+	end,
 })
 
--- ===================== PLAYER TAB =====================
-PlayerTab:CreateSection("Movement")
+TeleportsTab:CreateSection("🧑‍💼 Vendors")
+TeleportsTab:CreateButton({Name="Amy Thistlewitch",  Callback=function() teleportTo(VENDOR_TP["Amy Thistlewitch"])  end})
+TeleportsTab:CreateButton({Name="Arbewhy",           Callback=function() teleportTo(VENDOR_TP["Arbewhy"])           end})
+TeleportsTab:CreateButton({Name="Archaeologist",     Callback=function() teleportTo(VENDOR_TP["Archaeologist"])     end})
+
+TeleportsTab:CreateSection("🌙 Night Event Entrances")
+for _, event in pairs(NIGHT_EVENTS) do
+	local ev = event
+	TeleportsTab:CreateButton({
+		Name = "Teleport to "..ev.label,
+		Callback = function()
+			local entrance = ev.getEntrance()
+			if entrance then
+				local part = entrance:IsA("BasePart") and entrance
+					or entrance:FindFirstChildWhichIsA("BasePart", true)
+				if part then teleportTo(part.Position + Vector3.new(0, 5, 0))
+				else Rayfield:Notify({Title=ev.label, Content="Entrance exists but part not found.", Duration=3}) end
+			else
+				Rayfield:Notify({Title=ev.label, Content="Not available right now.", Duration=3})
+			end
+		end,
+	})
+end
+
+-- =====================================================================
+-- PLAYER TAB
+-- =====================================================================
+
+PlayerTab:CreateSection("🏃 Movement")
 PlayerTab:CreateSlider({Name="Walk Speed",  Range={0,100}, Increment=1,   CurrentValue=18,    Flag="WalkSpeed",  Callback=function(v) walkspeed=v end})
 PlayerTab:CreateSlider({Name="Jump Power",  Range={0,300}, Increment=1,   CurrentValue=81.5,  Flag="JumpPower",  Callback=function(v) jumppower=v end})
 PlayerTab:CreateSlider({Name="Gravity",     Range={0,900}, Increment=1,   CurrentValue=196.2, Flag="Gravity",    Callback=function(v) gravity=v end})
@@ -838,37 +1124,23 @@ PlayerTab:CreateToggle({Name="Fly", CurrentValue=false, Flag="Fly", Callback=fun
 	if v then NOFLY() task.wait() sFLY() else NOFLY() end
 end})
 
--- ===================== TOOLS =====================
-PlayerTab:CreateSection("Tools")
+PlayerTab:CreateSection("🛠 Tools")
 
--- ===== TELEKINESIS (CLEANED UP) =====
--- Controls:
---   Hold Click  → grab/move the part you aimed at
---   Q           → bring object 10 studs closer
---   E           → push object 10 studs further
---   T           → snap object very close (10 studs)
---   Y           → fling object far away (200 studs)
---   R           → reset object rotation to zero
---   + / -       → increase / decrease grip force
-PlayerTab:CreateButton({Name = "Telekinesis", Callback = function()
-
-	-- Inject a fake 'script' reference into a plain function so it can use
-	-- script.Parent, script.ChildName etc. (standard exploit trick)
+-- Telekinesis (cleaned up with descriptive names)
+PlayerTab:CreateButton({Name = "Telekinesis  [Q/E distance | R reset rot | T close | Y fling]", Callback = function()
 	local function injectScriptEnv(scriptObj, fn)
-		local baseEnv = getfenv(fn)
+		local base = getfenv(fn)
 		setfenv(fn, setmetatable({}, {
 			__index = function(_, key)
-				if key == "script" then return scriptObj end
-				return baseEnv[key]
+				return key == "script" and scriptObj or base[key]
 			end
 		}))
 		return fn
 	end
 
-	local pendingFunctions = {}
-	local toolContainer    = Instance.new("Model", Lighting)
+	local pendingFns   = {}
+	local toolContainer = Instance.new("Model", Lighting)
 
-	-- ── Build the Tool ──────────────────────────────────────────
 	local tool = Instance.new("Tool")
 	tool.Name        = "Telekinesis"
 	tool.Parent      = toolContainer
@@ -877,7 +1149,6 @@ PlayerTab:CreateButton({Name = "Telekinesis", Callback = function()
 	tool.GripRight   = Vector3.new(0,0,1)
 	tool.GripUp      = Vector3.new(1,0,0)
 
-	-- Invisible handle part
 	local handle = Instance.new("Part")
 	handle.Name          = "Handle"
 	handle.Parent        = tool
@@ -891,23 +1162,19 @@ PlayerTab:CreateButton({Name = "Telekinesis", Callback = function()
 	handle.TopSurface    = Enum.SurfaceType.Smooth
 	handle.CFrame        = CFrame.new(-17.26,15.49,46, 0,1,0, 1,0,0, 0,0,-1)
 
-	-- ── LineConnect Script: draws a laser beam between two parts ─
 	local lineConnectScript = Instance.new("Script")
 	lineConnectScript.Name     = "LineConnect"
 	lineConnectScript.Parent   = tool
 	lineConnectScript.Disabled = true
 
-	table.insert(pendingFunctions, injectScriptEnv(lineConnectScript, function()
+	table.insert(pendingFns, injectScriptEnv(lineConnectScript, function()
 		task.wait()
-
-		-- ObjectValues are parented here by the caller
-		local part2ValueObj = script.Part2           -- ObjectValue whose .Value is toPart
+		local part2ValueObj = script.Part2
 		local fromPart      = script.Part1.Value
 		local toPart        = script.Part2.Value
 		local container     = script.Par.Value
-		local colorSource   = script.Color           -- ObjectValue whose .Value has BrickColor etc.
+		local colorSource   = script.Color
 
-		-- Build the laser beam Part
 		local beam = Instance.new("Part")
 		beam.Name          = "TelekinesisLaser"
 		beam.Anchored      = true
@@ -919,52 +1186,42 @@ PlayerTab:CreateButton({Name = "Telekinesis", Callback = function()
 		beam.Size          = Vector3.new(1,1,1)
 		Instance.new("BlockMesh", beam)
 
-		-- Update every frame until the connection is severed
 		while true do
 			if part2ValueObj.Value == nil then break end
-			if fromPart == nil or toPart == nil or container == nil then break end
+			if not fromPart or not toPart or not container then break end
 			if not fromPart.Parent or not toPart.Parent then break end
 			if not container.Parent then break end
-
-			local dist     = (fromPart.Position - toPart.Position).Magnitude
-			beam.Parent    = container
+			local dist = (fromPart.Position - toPart.Position).Magnitude
+			beam.Parent      = container
 			beam.BrickColor  = colorSource.Value.BrickColor
 			beam.Reflectance = colorSource.Value.Reflectance
 			beam.Transparency = colorSource.Value.Transparency
-			-- Orient: start at fromPart, aim at toPart, offset half-way along
-			beam.CFrame    = CFrame.lookAt(fromPart.Position, toPart.Position)
-			               * CFrame.new(0, 0, -dist / 2)
+			beam.CFrame      = CFrame.lookAt(fromPart.Position, toPart.Position) * CFrame.new(0,0,-dist/2)
 			beam:FindFirstChildOfClass("BlockMesh").Scale = Vector3.new(0.25, 0.25, dist)
 			task.wait()
 		end
-
 		beam:Destroy()
 		script:Destroy()
 	end))
 
-	-- ── MainScript: input handling and physics ───────────────────
 	local mainScript = Instance.new("LocalScript")
 	mainScript.Name   = "MainScript"
 	mainScript.Parent = tool
 
-	table.insert(pendingFunctions, injectScriptEnv(mainScript, function()
+	table.insert(pendingFns, injectScriptEnv(mainScript, function()
 		task.wait()
-
 		local tkTool      = script.Parent
-		local lineConnect = tkTool.LineConnect  -- Script template to clone for beams
+		local lineConnect = tkTool.LineConnect
 
-		-- State
-		local grabbedObj  = nil   -- currently held BasePart
+		local grabbedObj  = nil
 		local isMouseDown = false
-		local objValRef   = nil   -- the ObjectValue pointing to grabbedObj (to sever beam)
-		local grabDist    = 20    -- distance kept between handle and object
+		local objValRef   = nil
+		local grabDist    = 20
 
-		-- Physics mover
 		local bodyPos = Instance.new("BodyPosition")
 		bodyPos.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
 		bodyPos.P        = bodyPos.P * 1.1
 
-		-- Small sphere shown at cursor while searching for a target
 		local cursorPart = Instance.new("Part")
 		cursorPart.Anchored   = true
 		cursorPart.CanCollide = false
@@ -975,45 +1232,33 @@ PlayerTab:CreateButton({Name = "Telekinesis", Callback = function()
 		cursorMesh.MeshType = Enum.MeshType.Sphere
 		cursorMesh.Scale    = Vector3.new(0.7, 0.7, 0.7)
 
-		local tkHandle      = tkTool.Handle
-		local beamColorSrc  = tkTool.Handle  -- colour is taken from handle's properties
+		local tkHandle     = tkTool.Handle
+		local beamColorSrc = tkTool.Handle
 
-		-- Spawn a laser beam between fromPart and toPart inside container
 		local function spawnBeam(fromPart, toPart, container)
-			local p1 = Instance.new("ObjectValue"); p1.Name = "Part1"; p1.Value = fromPart
-			local p2 = Instance.new("ObjectValue"); p2.Name = "Part2"; p2.Value = toPart
+			local p1  = Instance.new("ObjectValue"); p1.Name  = "Part1"; p1.Value  = fromPart
+			local p2  = Instance.new("ObjectValue"); p2.Name  = "Part2"; p2.Value  = toPart
 			local par = Instance.new("ObjectValue"); par.Name = "Par";   par.Value = container
 			local col = Instance.new("ObjectValue"); col.Name = "Color"; col.Value = beamColorSrc
-
-			local beamScript = lineConnect:Clone()
-			beamScript.Disabled = false
-			p1.Parent  = beamScript
-			p2.Parent  = beamScript
-			par.Parent = beamScript
-			col.Parent = beamScript
-			beamScript.Parent = workspace
-
-			-- Track the ObjectValue so we can sever the beam on release
+			local bs  = lineConnect:Clone()
+			bs.Disabled = false
+			p1.Parent = bs; p2.Parent = bs; par.Parent = bs; col.Parent = bs
+			bs.Parent = workspace
 			if toPart == grabbedObj then objValRef = p2 end
 		end
 
-		-- Handle mouse-down: find target, attach BodyPosition, keep it updated
 		local function onMouseDown(mouse)
 			if isMouseDown then return end
 			isMouseDown = true
-
-			-- Animate the cursor while the user holds and aims
 			task.spawn(function()
 				local cursor = cursorPart:Clone()
 				cursor.Parent = tkTool
 				spawnBeam(tkHandle, cursor, workspace)
-
 				while isMouseDown do
 					cursor.Parent = tkTool
 					if grabbedObj == nil then
 						if mouse.Target == nil then
-							local lookDir = CFrame.lookAt(tkHandle.Position, mouse.Hit.Position).LookVector
-							cursor.CFrame = CFrame.new(tkHandle.Position + lookDir * 1000)
+							cursor.CFrame = CFrame.new(tkHandle.Position + CFrame.lookAt(tkHandle.Position, mouse.Hit.Position).LookVector * 1000)
 						else
 							cursor.CFrame = CFrame.new(mouse.Hit.Position)
 						end
@@ -1025,8 +1270,6 @@ PlayerTab:CreateButton({Name = "Telekinesis", Callback = function()
 				end
 				cursor:Destroy()
 			end)
-
-			-- Wait until the mouse is over a movable BasePart
 			while isMouseDown do
 				if mouse.Target and not mouse.Target.Anchored then
 					grabbedObj = mouse.Target
@@ -1035,126 +1278,67 @@ PlayerTab:CreateButton({Name = "Telekinesis", Callback = function()
 				end
 				task.wait()
 			end
-
-			-- Move the grabbed object continuously until mouse released
 			while isMouseDown do
 				if not grabbedObj or not grabbedObj.Parent then break end
-				local lookDir   = CFrame.lookAt(tkHandle.Position, mouse.Hit.Position).LookVector
 				bodyPos.Parent   = grabbedObj
-				bodyPos.Position = tkHandle.Position + lookDir * grabDist
+				bodyPos.Position = tkHandle.Position + CFrame.lookAt(tkHandle.Position, mouse.Hit.Position).LookVector * grabDist
 				task.wait()
 			end
-
-			-- Release: destroy BodyPosition and clear state
 			if bodyPos.Parent then bodyPos:Destroy() end
 			bodyPos = Instance.new("BodyPosition")
 			bodyPos.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
 			bodyPos.P        = bodyPos.P * 1.1
-
 			if objValRef then objValRef.Value = nil end
-			grabbedObj = nil
-			objValRef  = nil
+			grabbedObj = nil; objValRef = nil
 		end
 
-		-- Handle key presses while the tool is equipped
 		local function onKeyDown(key)
 			key = key:lower()
-
-			if key == "q" then
-				-- Bring closer (min 10 studs)
-				grabDist = math.max(10, grabDist - 10)
-
-			elseif key == "e" then
-				-- Push further
-				grabDist = grabDist + 10
-
-			elseif key == "t" then
-				-- Snap to 10 studs
-				grabDist = 10
-
-			elseif key == "y" then
-				-- Fling to 200 studs
-				grabDist = 200
-
+			if     key == "q" then grabDist = math.max(10, grabDist - 10)
+			elseif key == "e" then grabDist = grabDist + 10
+			elseif key == "t" then grabDist = 10
+			elseif key == "y" then grabDist = 200
 			elseif key == "r" then
-				-- Reset rotation of held object
 				if not grabbedObj then return end
-				for _, child in pairs(grabbedObj:GetChildren()) do
-					if child:IsA("BodyGyro") then return end  -- already resetting
-				end
+				for _, c in pairs(grabbedObj:GetChildren()) do if c:IsA("BodyGyro") then return end end
 				local bg = Instance.new("BodyGyro")
 				bg.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
 				bg.CFrame    = CFrame.new(grabbedObj.CFrame.Position)
 				bg.Parent    = grabbedObj
-				-- Give it a moment then remove
 				task.delay(0.5, function()
 					if bg and bg.Parent then bg:Destroy() end
-					if grabbedObj then
-						pcall(function()
-							grabbedObj.AssemblyAngularVelocity = Vector3.zero
-							grabbedObj.Orientation = Vector3.zero
-						end)
-					end
+					if grabbedObj then pcall(function() grabbedObj.AssemblyAngularVelocity = Vector3.zero; grabbedObj.Orientation = Vector3.zero end) end
 				end)
-
-			elseif key == "=" then
-				bodyPos.P = bodyPos.P * 1.5
-
-			elseif key == "-" then
-				bodyPos.P = bodyPos.P * 0.5
+			elseif key == "=" then bodyPos.P = bodyPos.P * 1.5
+			elseif key == "-" then bodyPos.P = bodyPos.P * 0.5
 			end
 		end
 
-		-- Wire everything up when the tool is equipped
 		tkTool.Equipped:Connect(function(mouse)
-			local char = tkTool.Parent
-			local hum  = char and char:FindFirstChildOfClass("Humanoid")
-
-			if hum then
-				hum.Changed:Connect(function()
-					if hum.Health <= 0 then
-						isMouseDown = false
-						pcall(function() bodyPos:Destroy() end)
-						pcall(function() cursorPart:Destroy() end)
-						tkTool:Destroy()
-					end
-				end)
-			end
-
+			local hum = tkTool.Parent and tkTool.Parent:FindFirstChildOfClass("Humanoid")
+			if hum then hum.Changed:Connect(function()
+				if hum.Health <= 0 then isMouseDown=false; pcall(function() bodyPos:Destroy() end); tkTool:Destroy() end
+			end) end
 			mouse.Button1Down:Connect(function() task.spawn(onMouseDown, mouse) end)
-			mouse.Button1Up:Connect(function()   isMouseDown = false           end)
-			mouse.KeyDown:Connect(function(key)  onKeyDown(key)                end)
+			mouse.Button1Up:Connect(function() isMouseDown = false end)
+			mouse.KeyDown:Connect(onKeyDown)
 			mouse.Icon = "rbxasset://textures/GunCursor.png"
 		end)
 	end))
 
-	-- Move tool to player backpack
 	for _, item in pairs(toolContainer:GetChildren()) do
 		item.Parent = Players.LocalPlayer.Backpack
 		pcall(function() item:MakeJoints() end)
 	end
 	toolContainer:Destroy()
-
-	-- Execute the injected script functions
-	for _, fn in pairs(pendingFunctions) do
-		task.spawn(pcall, fn)
-	end
-
-	Rayfield:Notify({
-		Title   = "Telekinesis",
-		Content = "Added to backpack!\nQ/E: distance  |  R: reset rot\nT: pull close  |  Y: fling  |  +/-: force",
-		Duration = 7,
-	})
+	for _, fn in pairs(pendingFns) do task.spawn(pcall, fn) end
+	Rayfield:Notify({Title="Telekinesis", Content="Added to backpack!", Duration=4})
 end})
 
 PlayerTab:CreateButton({Name = "B-Tools", Callback = function()
-	for _, v in pairs(Workspace:GetDescendants()) do
-		if v:IsA("BasePart") then v.Locked = false end
-	end
+	for _, v in pairs(Workspace:GetDescendants()) do if v:IsA("BasePart") then v.Locked = false end end
 	for i = 1, 4 do
-		local Tool = Instance.new("HopperBin")
-		Tool.BinType = i
-		Tool.Parent  = speaker:FindFirstChildOfClass("Backpack")
+		local t = Instance.new("HopperBin"); t.BinType = i; t.Parent = speaker:FindFirstChildOfClass("Backpack")
 	end
 	Rayfield:Notify({Title="B-Tools", Content="Tools added to backpack!", Duration=3})
 end})
@@ -1162,15 +1346,143 @@ PlayerTab:CreateButton({Name = "Infinite Yield", Callback = function()
 	loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"))()
 end})
 
--- ===================== ESP TAB =====================
+-- =====================================================================
+-- SHOPS TAB
+-- =====================================================================
+task.spawn(function()
+	repeat task.wait(0.2) until Workspace:FindFirstChild("Shops")
+
+	local shopNames = getShopNames()
+	if #shopNames == 0 then shopNames = {"No shops found"} end
+
+	ShopsTab:CreateSection("🛒 Shop Browser")
+
+	ShopsTab:CreateDropdown({
+		Name = "Select Shop", Options = shopNames,
+		CurrentOption = {shopNames[1]}, MultipleOptions = false,
+		SearchEnabled = true, Flag = "SelectedShop",
+		Callback = function(opt) selectedShopName = opt[1] end,
+	})
+	selectedShopName = shopNames[1]
+
+	ShopsTab:CreateButton({Name = "🔍 View Items in Selected Shop", Callback = function()
+		if not selectedShopName or selectedShopName == "No shops found" then
+			Rayfield:Notify({Title="Shops", Content="Select a shop first.", Duration=3}) return
+		end
+		local items = getShopItems(selectedShopName)
+		if #items == 0 then
+			Rayfield:Notify({Title=selectedShopName, Content="Shop is empty or items couldn't be read.", Duration=4}) return
+		end
+		-- Show in multiple notifications if over 5 items (notification character limit)
+		local lines = {}
+		for _, item in pairs(items) do
+			table.insert(lines, "• "..item.name.."  —  "..item.price.."g")
+		end
+		local chunk, i = {}, 1
+		for _, line in pairs(lines) do
+			table.insert(chunk, line)
+			if #chunk == 5 then
+				Rayfield:Notify({Title="🛒 "..selectedShopName.." ("..i.."-"..(i+#chunk-1)..")", Content=table.concat(chunk,"\n"), Duration=14})
+				chunk = {}; task.wait(0.2)
+			end
+			i += 1
+		end
+		if #chunk > 0 then
+			Rayfield:Notify({Title="🛒 "..selectedShopName, Content=table.concat(chunk,"\n"), Duration=14})
+		end
+	end})
+
+	ShopsTab:CreateButton({Name = "📍 Teleport to Selected Shop", Callback = function()
+		if not selectedShopName or selectedShopName == "No shops found" then
+			Rayfield:Notify({Title="Shops", Content="Select a shop first.", Duration=3}) return
+		end
+		local pos = getShopPosition(selectedShopName)
+		if pos then
+			teleportTo(pos + Vector3.new(0, 5, 0))
+			Rayfield:Notify({Title="Teleported", Content="Arrived at "..selectedShopName, Duration=3})
+		else
+			Rayfield:Notify({Title="Shops", Content="Couldn't find "..selectedShopName.."'s position.", Duration=3})
+		end
+	end})
+
+	ShopsTab:CreateSection("🔔 Item Watcher")
+
+	ShopsTab:CreateToggle({
+		Name = "Enable Item Watcher (checks every 30s)", CurrentValue = false, Flag = "ShopWatcher",
+		Callback = function(v)
+			shopWatchEnabled = v
+			Rayfield:Notify({Title="Shop Watcher", Content=v and "Active — also refreshes on NightBegin." or "Disabled.", Duration=3})
+		end,
+	})
+	ShopsTab:CreateInput({
+		Name = "👁 Watch Item", PlaceholderText = "Item name...", RemoveTextAfterFocus = true,
+		Callback = function(value)
+			if not value or value == "" then return end
+			for _, info in pairs(ReplicatedStorage.ItemInfo:GetChildren()) do
+				local fn = info:FindFirstChild("FullName")
+				if fn and string.lower(fn.Value) == string.lower(value) then
+					local id = tonumber(info.Name)
+					for _, w in pairs(watchedShopItems) do
+						if w.id == id then Rayfield:Notify({Title="Watch List", Content="Already watching: "..fn.Value, Duration=3}) return end
+					end
+					table.insert(watchedShopItems, {id=id, name=fn.Value})
+					Rayfield:Notify({Title="Watch List", Content="Now watching: "..fn.Value, Duration=3})
+					return
+				end
+			end
+			Rayfield:Notify({Title="Watch List", Content="Item not found: "..value, Duration=3})
+		end,
+	})
+	ShopsTab:CreateInput({
+		Name = "🗑 Stop Watching Item", PlaceholderText = "Item name...", RemoveTextAfterFocus = true,
+		Callback = function(value)
+			if not value or value == "" then return end
+			for i, w in pairs(watchedShopItems) do
+				if string.lower(w.name) == string.lower(value) then
+					table.remove(watchedShopItems, i)
+					Rayfield:Notify({Title="Watch List", Content="Stopped watching: "..w.name, Duration=3}) return
+				end
+			end
+			Rayfield:Notify({Title="Watch List", Content="Not in list: "..value, Duration=3})
+		end,
+	})
+	ShopsTab:CreateButton({Name = "📋 View Watch List", Callback = function()
+		if #watchedShopItems == 0 then
+			Rayfield:Notify({Title="Watch List", Content="Nothing being watched.", Duration=3}) return
+		end
+		local lines = {}
+		for _, w in pairs(watchedShopItems) do table.insert(lines, "• "..w.name) end
+		Rayfield:Notify({Title="Watch List ("..#watchedShopItems..")", Content=table.concat(lines,"\n"), Duration=10})
+	end})
+	ShopsTab:CreateButton({Name = "❌ Clear Watch List", Callback = function()
+		watchedShopItems = {}
+		Rayfield:Notify({Title="Watch List", Content="Cleared.", Duration=3})
+	end})
+	ShopsTab:CreateButton({Name = "🔎 Check Shops Right Now", Callback = function()
+		if #watchedShopItems == 0 then
+			Rayfield:Notify({Title="Shop Watcher", Content="Add items to your watch list first.", Duration=3}) return
+		end
+		local hits = findWatchedItemsInShops()
+		if #hits == 0 then
+			Rayfield:Notify({Title="Shop Watcher", Content="None of your watched items are in stock.", Duration=5})
+		else
+			for _, hit in pairs(hits) do notifyShopItem(hit.itemName, hit.shopName, hit.price) task.wait(0.4) end
+		end
+	end})
+end)
+
+-- =====================================================================
+-- SETTINGS TAB  (ESP + UI Theme + Exit)
+-- =====================================================================
+
+SettingsTab:CreateSection("🎨 ESP — Plant")
 local spawnersFolder = Workspace.Spawners
 for _, v in pairs(spawnersFolder:GetDescendants()) do
 	if v.Name == "PlantBoxHandleAdornment" or v.Name == "PlantBeam" then v:Destroy() end
 end
 
-ESPTab:CreateSection("Plant ESP")
-ESPTab:CreateToggle({Name="Plant ESP", CurrentValue=false, Flag="PlantESP", Callback=function(v)
-	pESP = v
+SettingsTab:CreateToggle({Name="Plant ESP", CurrentValue=false, Flag="PlantESP", Callback=function(v)
+	espToggles.plants = v
 	if not v then
 		for _, item in pairs(spawnersFolder:GetDescendants()) do
 			if item.Name == "PlantBoxHandleAdornment" or item.Name == "PlantBeam" then item:Destroy() end
@@ -1178,11 +1490,10 @@ ESPTab:CreateToggle({Name="Plant ESP", CurrentValue=false, Flag="PlantESP", Call
 	end
 	Rayfield:Notify({Title="Plant ESP", Content=v and "Enabled" or "Disabled", Duration=3})
 end})
-ESPTab:CreateInput({
+SettingsTab:CreateInput({
 	Name = "Add Plant", PlaceholderText = "Plant name...", RemoveTextAfterFocus = true,
 	Callback = function(value)
 		if not value or value == "" then return end
-		local found = false
 		for _, v in pairs(ReplicatedStorage.ItemInfo:GetDescendants()) do
 			if v.Name == "FullName" and string.lower(v.Value) == string.lower(value) then
 				local id = tonumber(v.Parent.Name)
@@ -1194,13 +1505,13 @@ ESPTab:CreateInput({
 				else
 					Rayfield:Notify({Title="Plant ESP", Content="Already tracking: "..v.Value, Duration=3})
 				end
-				found = true; break
+				return
 			end
 		end
-		if not found then Rayfield:Notify({Title="Plant ESP", Content="Not found: "..value, Duration=3}) end
-	end
+		Rayfield:Notify({Title="Plant ESP", Content="Not found: "..value, Duration=3})
+	end,
 })
-ESPTab:CreateInput({
+SettingsTab:CreateInput({
 	Name = "Remove Plant", PlaceholderText = "Plant name...", RemoveTextAfterFocus = true,
 	Callback = function(value)
 		if not value or value == "" then return end
@@ -1210,207 +1521,61 @@ ESPTab:CreateInput({
 				local idx = table.find(plants, id)
 				if idx then
 					table.remove(plants, idx)
-					local n = table.find(plantNames, v.Value); if n then table.remove(plantNames, n) end
+					local n = table.find(plantNames, v.Value);        if n then table.remove(plantNames, n) end
 					local l = table.find(loweredPlantNames, string.lower(v.Value)); if l then table.remove(loweredPlantNames, l) end
 					for _, item in pairs(spawnersFolder:GetDescendants()) do
 						if item.Name == "PlantBoxHandleAdornment" or item.Name == "PlantBeam" then item:Destroy() end
 					end
 					Rayfield:Notify({Title="Plant ESP", Content="Removed: "..v.Value, Duration=3})
 				end
-				break
+				return
 			end
 		end
-	end
+	end,
 })
 
--- ===================== SHOPS TAB =====================
--- The tab is built after Workspace.Shops has loaded.
--- It provides:
---   • A dropdown to pick which shop to inspect
---   • A button to list every item currently for sale in that shop
---   • A button to teleport directly to that shop
---   • A watch-list where you type item names you want to be alerted about
---   • A background loop (toggle) that fires OS notifications when a
---     watched item appears in any shop, with a one-tap teleport button
-
-task.spawn(function()
-	repeat task.wait(0.2) until Workspace:FindFirstChild("Shops")
-
-	-- Gather shop names that actually have a Slots folder
-	local shopNames = getShopNames()
-	if #shopNames == 0 then shopNames = {"No shops loaded"} end
-
-	ShopsTab:CreateSection("Shop Browser")
-
-	ShopsTab:CreateDropdown({
-		Name          = "Select Shop",
-		Options       = shopNames,
-		CurrentOption = {shopNames[1]},
-		MultipleOptions = false,
-		Flag          = "SelectedShop",
-		Callback      = function(opt)
-			selectedShopName = opt[1]
-		end
-	})
-	-- Set default
-	selectedShopName = shopNames[1]
-
-	-- View items in the chosen shop
-	ShopsTab:CreateButton({Name = "🔍 View Items in Selected Shop", Callback = function()
-		if not selectedShopName or selectedShopName == "No shops loaded" then
-			Rayfield:Notify({Title="Shops", Content="Select a shop first.", Duration=3})
-			return
-		end
-		local items = getShopItems(selectedShopName)
-		if #items == 0 then
-			Rayfield:Notify({Title=selectedShopName, Content="No items found (shop may be empty).", Duration=4})
-			return
-		end
-		local lines = {}
-		for _, item in pairs(items) do
-			table.insert(lines, "• "..item.name.."  —  "..tostring(item.price).."g")
-		end
-		Rayfield:Notify({
-			Title   = "🛒 "..selectedShopName.." ("..#items.." items)",
-			Content = table.concat(lines, "\n"),
-			Duration = 14,
-		})
-	end})
-
-	-- Teleport to the chosen shop
-	ShopsTab:CreateButton({Name = "📍 Teleport to Selected Shop", Callback = function()
-		if not selectedShopName or selectedShopName == "No shops loaded" then
-			Rayfield:Notify({Title="Shops", Content="Select a shop first.", Duration=3})
-			return
-		end
-		local pos = getShopPosition(selectedShopName)
-		if pos then
-			goto(pos + Vector3.new(0, 5, 0))
-			Rayfield:Notify({Title="Teleported", Content="Arrived at "..selectedShopName, Duration=3})
-		else
-			Rayfield:Notify({Title="Shops", Content="Couldn't find "..selectedShopName.."'s position.", Duration=3})
-		end
-	end})
-
-	-- ── Item Watcher ───────────────────────────────────────────
-	ShopsTab:CreateSection("Item Watcher")
-
-	ShopsTab:CreateToggle({
-		Name = "🔔 Shop Item Notifier",
-		CurrentValue = false,
-		Flag = "ShopWatcher",
+SettingsTab:CreateSection("🎨 ESP — NPCs & Events")
+SettingsTab:CreateToggle({Name="Frog ESP", CurrentValue=false, Flag="FrogESP", Callback=function(v)
+	espToggles.frog = v
+	Rayfield:Notify({Title="Frog ESP", Content=v and "Enabled" or "Disabled", Duration=3})
+end})
+for _, event in pairs(NIGHT_EVENTS) do
+	local ev = event
+	SettingsTab:CreateToggle({
+		Name = ev.label.." ESP", CurrentValue = false, Flag = ev.key.."ESP",
 		Callback = function(v)
-			shopWatchEnabled = v
-			Rayfield:Notify({
-				Title   = "Shop Watcher",
-				Content = v and "Active — checking every 30 seconds." or "Disabled.",
-				Duration = 3,
-			})
-		end
-	})
-
-	-- Add an item to the watch list by name
-	ShopsTab:CreateInput({
-		Name             = "👁 Watch for Item",
-		PlaceholderText  = "Exact item name...",
-		RemoveTextAfterFocus = true,
-		Callback = function(value)
-			if not value or value == "" then return end
-			-- Look up the item in ReplicatedStorage
-			for _, info in pairs(ReplicatedStorage.ItemInfo:GetChildren()) do
-				local fn = info:FindFirstChild("FullName")
-				if fn and string.lower(fn.Value) == string.lower(value) then
-					local id = tonumber(info.Name)
-					-- Prevent duplicates
-					local already = false
-					for _, w in pairs(watchedShopItems) do
-						if w.id == id then already = true break end
-					end
-					if already then
-						Rayfield:Notify({Title="Watch List", Content="Already watching: "..fn.Value, Duration=3})
-					else
-						table.insert(watchedShopItems, {id = id, name = fn.Value})
-						Rayfield:Notify({Title="Watch List", Content="Now watching: "..fn.Value, Duration=3})
-					end
-					return
-				end
+			espToggles[ev.key] = v
+			if not v then
+				local entrance = ev.getEntrance()
+				if entrance then removeESPFromPart(entrance, ev.key) end
 			end
-			Rayfield:Notify({Title="Watch List", Content="Item not found: "..value, Duration=3})
-		end
+			Rayfield:Notify({Title=ev.label.." ESP", Content=v and "Enabled" or "Disabled", Duration=3})
+		end,
 	})
+end
 
-	-- Remove an item from the watch list
-	ShopsTab:CreateInput({
-		Name             = "🗑 Stop Watching Item",
-		PlaceholderText  = "Exact item name...",
-		RemoveTextAfterFocus = true,
-		Callback = function(value)
-			if not value or value == "" then return end
-			for i, w in pairs(watchedShopItems) do
-				if string.lower(w.name) == string.lower(value) then
-					table.remove(watchedShopItems, i)
-					Rayfield:Notify({Title="Watch List", Content="Stopped watching: "..w.name, Duration=3})
-					return
-				end
-			end
-			Rayfield:Notify({Title="Watch List", Content="Not in watch list: "..value, Duration=3})
-		end
-	})
-
-	-- Show current watch list
-	ShopsTab:CreateButton({Name = "📋 View Watch List", Callback = function()
-		if #watchedShopItems == 0 then
-			Rayfield:Notify({Title="Watch List", Content="Nothing being watched yet.", Duration=3})
-			return
-		end
-		local lines = {}
-		for _, w in pairs(watchedShopItems) do
-			table.insert(lines, "• "..w.name)
-		end
-		Rayfield:Notify({
-			Title   = "Watch List ("..#watchedShopItems..")",
-			Content = table.concat(lines, "\n"),
-			Duration = 10,
-		})
-	end})
-
-	-- Clear entire watch list
-	ShopsTab:CreateButton({Name = "❌ Clear Watch List", Callback = function()
-		watchedShopItems = {}
-		Rayfield:Notify({Title="Watch List", Content="Cleared.", Duration=3})
-	end})
-
-	-- Manual scan (don't wait for the 30-second timer)
-	ShopsTab:CreateButton({Name = "🔎 Check Shops Now", Callback = function()
-		if #watchedShopItems == 0 then
-			Rayfield:Notify({Title="Shop Watcher", Content="Add items to your watch list first.", Duration=3})
-			return
-		end
-		local hits = findWatchedItemsInShops()
-		if #hits == 0 then
-			Rayfield:Notify({Title="Shop Watcher", Content="None of your watched items are in stock right now.", Duration=5})
-		else
-			for _, hit in pairs(hits) do
-				notifyShopItem(hit.itemName, hit.shopName, hit.price)
-				task.wait(0.4)
-			end
-		end
-	end})
-end)
-
--- ===================== SETTINGS TAB =====================
-SettingsTab:CreateSection("UI")
+SettingsTab:CreateSection("🎨 UI Theme")
 SettingsTab:CreateDropdown({
 	Name = "Theme",
 	Options = {"Default","Ocean","AmberGlow","Light","Amethyst","Green","Bloom","DarkBlue","Serenity"},
-	CurrentOption = {"Default"}, Flag = "Theme",
-	Callback = function(opt) Window:SetTheme(opt[1]) end
+	CurrentOption = {"Default"}, Flag = "Theme", SearchEnabled = true,
+	Callback = function(opt)
+		pcall(function() Rayfield:SetTheme(opt[1]) end)
+		pcall(function() Window:SetTheme(opt[1]) end)
+	end,
 })
-SettingsTab:CreateSection("Exit")
+
+SettingsTab:CreateSection("💡 Suggestions")
+SettingsTab:CreateLabel("Enable NightBegin notifications to be alerted about Strangeman, Rabbithole, and Pitfall entrances each night.")
+SettingsTab:CreateLabel("Use Item Watcher in the Shops tab to get notified when a rare item appears in any shop.")
+SettingsTab:CreateLabel("Plant ESP works best in private servers to reduce lag from many beams.")
+SettingsTab:CreateLabel("Auto Collect toggles for Present & Frog fire InteractEvent automatically after teleporting.")
+
+SettingsTab:CreateSection("🚪 Exit")
 SettingsTab:CreateButton({Name = "Exit Hub", Callback = function()
 	getgenv().scriptRunning = false
-	ffarm=false; bfarm=false; dfarm=false; lfarm=false; pESP=false
-	shopWatchEnabled=false; watchedShopItems={}
+	ffarm=false; bfarm=false; dfarm=false; lfarm=false
+	espToggles.plants=false; shopWatchEnabled=false; watchedShopItems={}
 	plants={}; plantNames={}; loweredPlantNames={}
 	pcall(function()
 		local hum = speaker.Character:FindFirstChildWhichIsA("Humanoid")
@@ -1422,54 +1587,46 @@ SettingsTab:CreateButton({Name = "Exit Hub", Callback = function()
 	for _, v in pairs(spawnersFolder:GetDescendants()) do
 		if v.Name == "PlantBoxHandleAdornment" or v.Name == "PlantBeam" then v:Destroy() end
 	end
+	clearNightESP()
 	Rayfield:Destroy()
 end})
 
--- ===================== FLY FUNCTIONS =====================
+-- =====================================================================
+-- FLY FUNCTIONS
+-- =====================================================================
 function sFLY()
 	repeat task.wait() until speaker.Character and speaker.Character:FindFirstChild("HumanoidRootPart")
 	if flyKeyDown then flyKeyDown:Disconnect() end
 	if flyKeyUp   then flyKeyUp:Disconnect()   end
-
-	local T  = speaker.Character.HumanoidRootPart
+	local T = speaker.Character.HumanoidRootPart
 	local CONTROL = {F=0, B=0, L=0, R=0}
 	local SPEED   = 0
 	local BG = Instance.new("BodyGyro")
 	local BV = Instance.new("BodyVelocity")
-	BG.P          = 9e4
-	BG.maxTorque  = Vector3.new(9e9, 9e9, 9e9)
-	BG.Parent     = T
-	BV.maxForce   = Vector3.new(9e9, 9e9, 9e9)
-	BV.Parent     = T
+	BG.P = 9e4; BG.maxTorque = Vector3.new(9e9,9e9,9e9); BG.Parent = T
+	BV.maxForce = Vector3.new(9e9,9e9,9e9); BV.Parent = T
 	FLYING = true
-
 	local hum = speaker.Character:FindFirstChildOfClass("Humanoid")
 	if hum then hum.PlatformStand = true end
 
-	flyKeyDown = Mouse.KeyDown:Connect(function(KEY)
-		KEY = KEY:lower()
-		if     KEY == "w" then CONTROL.F =  iyflyspeed
-		elseif KEY == "s" then CONTROL.B = -iyflyspeed
-		elseif KEY == "a" then CONTROL.L = -iyflyspeed
-		elseif KEY == "d" then CONTROL.R =  iyflyspeed
-		end
+	flyKeyDown = Mouse.KeyDown:Connect(function(k)
+		k = k:lower()
+		if k=="w" then CONTROL.F= iyflyspeed elseif k=="s" then CONTROL.B=-iyflyspeed
+		elseif k=="a" then CONTROL.L=-iyflyspeed elseif k=="d" then CONTROL.R= iyflyspeed end
 	end)
-	flyKeyUp = Mouse.KeyUp:Connect(function(KEY)
-		KEY = KEY:lower()
-		if     KEY == "w" then CONTROL.F = 0
-		elseif KEY == "s" then CONTROL.B = 0
-		elseif KEY == "a" then CONTROL.L = 0
-		elseif KEY == "d" then CONTROL.R = 0
-		end
+	flyKeyUp = Mouse.KeyUp:Connect(function(k)
+		k = k:lower()
+		if k=="w" then CONTROL.F=0 elseif k=="s" then CONTROL.B=0
+		elseif k=="a" then CONTROL.L=0 elseif k=="d" then CONTROL.R=0 end
 	end)
 
 	task.spawn(function()
 		repeat task.wait()
 			iyflyspeed = flyspeed
-			SPEED = (CONTROL.L+CONTROL.R ~= 0 or CONTROL.F+CONTROL.B ~= 0) and 50 or 0
+			SPEED = (CONTROL.L+CONTROL.R~=0 or CONTROL.F+CONTROL.B~=0) and 50 or 0
 			BV.velocity = (
-				(Workspace.CurrentCamera.CoordinateFrame.LookVector * (CONTROL.F + CONTROL.B))
-				+ ((Workspace.CurrentCamera.CoordinateFrame * CFrame.new(CONTROL.L+CONTROL.R, 0, 0)).Position
+				(Workspace.CurrentCamera.CoordinateFrame.LookVector * (CONTROL.F+CONTROL.B))
+				+ ((Workspace.CurrentCamera.CoordinateFrame * CFrame.new(CONTROL.L+CONTROL.R,0,0)).Position
 				   - Workspace.CurrentCamera.CoordinateFrame.Position)
 			) * SPEED
 			BG.CFrame = Workspace.CurrentCamera.CoordinateFrame
@@ -1488,30 +1645,28 @@ function NOFLY()
 	if hum then hum.PlatformStand = false end
 end
 
--- ===================== MAIN LOOPS =====================
+-- =====================================================================
+-- MAIN LOOPS
+-- =====================================================================
 
--- Humanoid stats loop
+-- Humanoid stats
 task.spawn(function()
 	while getgenv().scriptRunning do
 		task.wait()
 		local hum = speaker.Character and speaker.Character:FindFirstChildWhichIsA("Humanoid")
-		if hum then
-			hum.MaxSlopeAngle = sangle
-			hum.WalkSpeed     = walkspeed
-			hum.JumpPower     = jumppower
-		end
+		if hum then hum.MaxSlopeAngle=sangle; hum.WalkSpeed=walkspeed; hum.JumpPower=jumppower end
 		Workspace.Gravity = gravity
 	end
 end)
 
--- AutoFarm loop (Firefly, Deli, Bird Nests)
+-- AutoFarm: Firefly, Deli, Bird Nests
 task.spawn(function()
 	while getgenv().scriptRunning do
 		task.wait()
 
 		if ffarm then
 			local fly = Workspace.Fireflies:FindFirstChild("FireflyServer")
-			if fly then gotofirefly(fly) end
+			if fly then teleportToFirefly(fly) end
 			task.wait(0.1)
 		end
 
@@ -1520,17 +1675,13 @@ task.spawn(function()
 			pcall(function()
 				if Workspace.Deli.Booth1:FindFirstChild("WaiterLocation") then
 					if shortwait then
-						Workspace.Deli.Booth1.WaiterLocation.Dialog1.D.D1.D1.D1.C1.D1.E.RE1:FireServer()
-						hideDialogs()
+						Workspace.Deli.Booth1.WaiterLocation.Dialog1.D.D1.D1.D1.C1.D1.E.RE1:FireServer(); hideDialogs()
 					elseif longwait then
-						Workspace.Deli.Booth1.WaiterLocation.Dialog1.D.D1.D1.D1.C2.D1.E.RE2:FireServer()
-						hideDialogs()
+						Workspace.Deli.Booth1.WaiterLocation.Dialog1.D.D1.D1.D1.C2.D1.E.RE2:FireServer(); hideDialogs()
 					elseif randomboth then
 						task.wait(0.05)
-						Workspace.Deli.Booth1.WaiterLocation.Dialog1.D.D1.D1.D1.C2.D1.E.RE2:FireServer()
-						hideDialogs(); task.wait(0.05)
-						Workspace.Deli.Booth1.WaiterLocation.Dialog1.D.D1.D1.D1.C1.D1.E.RE1:FireServer()
-						hideDialogs(); task.wait(0.05)
+						Workspace.Deli.Booth1.WaiterLocation.Dialog1.D.D1.D1.D1.C2.D1.E.RE2:FireServer(); hideDialogs(); task.wait(0.05)
+						Workspace.Deli.Booth1.WaiterLocation.Dialog1.D.D1.D1.D1.C1.D1.E.RE1:FireServer(); hideDialogs(); task.wait(0.05)
 					end
 				end
 			end)
@@ -1542,8 +1693,8 @@ task.spawn(function()
 				if birdSpawner:FindFirstChild("Collectible") then
 					local part = birdSpawner.Collectible:FindFirstChildWhichIsA("BasePart")
 					if part then
-						if notif.birdnest then Rayfield:Notify({Title="Bird Nests", Content="Nest found! Collecting...", Duration=3}) end
-						goto(part.Position); task.wait(0.05)
+						if notif.birdnest then Rayfield:Notify({Title="Bird Nests", Content="Nest found!", Duration=3}) end
+						teleportTo(part.Position); task.wait(0.05)
 						birdSpawner.Collectible.InteractEvent:FireServer()
 						for i = 0, 50 do ReplicatedStorage.Events.OpenSlot:FireServer(i) end
 						task.wait(3)
@@ -1551,31 +1702,23 @@ task.spawn(function()
 						if notif.birdnest then Rayfield:Notify({Title="Bird Nests", Content="Not loaded — moving to spawn...", Duration=3}) end
 						for i = 0, 50 do ReplicatedStorage.Events.OpenSlot:FireServer(i) end
 						local brick = birdSpawner.SpawnLocations:FindFirstChild("SpawnBrick")
-						if brick then
-							brick.Name = "lol"
-							goto(birdSpawner.SpawnLocations.lol.Position + Vector3.new(0,10,0))
-						end
+						if brick then brick.Name="lol"; teleportTo(birdSpawner.SpawnLocations.lol.Position+Vector3.new(0,10,0)) end
 						task.wait(3)
 					end
-				else
-					task.wait(3)
-				end
+				else task.wait(3) end
 			end
 		end
 	end
 end)
 
--- Lost AutoFarm loop
+-- Lost AutoFarm
 task.spawn(function()
 	while getgenv().scriptRunning do
 		task.wait()
 		if lfarm then
 			amountEmptyInventory = 20
 			task.wait(0.3)
-			for i = 0, 100, 10 do
-				task.wait()
-				pcall(function() Workspace.Guttermouth["Door_GuttermouthPhantom (Hidden Key)"].InteractEvent:FireServer(true) end)
-			end
+			for i = 0, 100, 10 do task.wait() pcall(function() Workspace.Guttermouth["Door_GuttermouthPhantom (Hidden Key)"].InteractEvent:FireServer(true) end) end
 			task.wait(4.5)
 			pcall(function()
 				for _, v in pairs(Workspace.Guttermouth.GuttermouthRoom4.Monsters:GetChildren()) do
@@ -1583,39 +1726,37 @@ task.spawn(function()
 				end
 			end)
 			task.wait(4)
-			goto(Vector3.new(12546,252,-2359))
+			teleportTo(Vector3.new(12546,252,-2359))
 			repeat task.wait() until Workspace:FindFirstChild("GuttermouthChest")
 			pcall(function() Workspace.Guttermouth.GuttermouthRoom4.ClaimRewards:InvokeServer(true) end)
 			task.wait(0.5)
 			if Workspace:FindFirstChild("GuttermouthChest") then Workspace.GuttermouthChest:Destroy() end
-			goto(Vector3.new(12529,252,-2350))
+			teleportTo(Vector3.new(12529,252,-2350))
 			pcall(function()
-				local invFrame = Players.LocalPlayer.PlayerGui.Container.Main["INV_SF"]
-				for _, v in pairs(invFrame:GetDescendants()) do
+				for _, v in pairs(Players.LocalPlayer.PlayerGui.Container.Main["INV_SF"]:GetDescendants()) do
 					if v.Name == "HoverText" and v.Value ~= "" then amountEmptyInventory -= 1 end
 				end
 			end)
 			if amountEmptyInventory <= 0 then
 				task.wait(1)
-				goto(Vector3.new(713,228,-483))
-				for i = 0, 10 do sellLostItems() task.wait(0.3) end
-				task.wait(1)
-				amountEmptyInventory = 20
-				goto(Vector3.new(12524,252,-2349))
-				for i = 0, 100, 10 do task.wait(0.01) pcall(function() Workspace.Guttermouth.GuttermouthRoom4.GutterExit.InteractEvent:FireServer(true) end) end
+				teleportTo(Vector3.new(713,228,-483))
+				for _ = 0, 10 do sellLostItems() task.wait(0.3) end
+				task.wait(1); amountEmptyInventory = 20
+				teleportTo(Vector3.new(12524,252,-2349))
+				for _ = 0, 100, 10 do task.wait(0.01) pcall(function() Workspace.Guttermouth.GuttermouthRoom4.GutterExit.InteractEvent:FireServer(true) end) end
 				task.wait(1)
 			end
-			for i = 0, 100, 10 do task.wait() pcall(function() Workspace.Guttermouth.GuttermouthRoom4.GutterExit.InteractEvent:FireServer(true) end) end
+			for _ = 0, 100, 10 do task.wait() pcall(function() Workspace.Guttermouth.GuttermouthRoom4.GutterExit.InteractEvent:FireServer(true) end) end
 			task.wait(0.3)
 		end
 	end
 end)
 
--- Plant ESP loop
+-- Plant ESP
 task.spawn(function()
 	while getgenv().scriptRunning do
 		task.wait(1)
-		if pESP and #plants > 0 then
+		if espToggles.plants and #plants > 0 then
 			for _, v in pairs(spawnersFolder:GetDescendants()) do
 				if v and v:IsA("IntValue") and v.Name == "Item" and v.Parent and v.Parent.Name == "Info" then
 					if table.find(plants, tonumber(v.Value)) then
@@ -1623,24 +1764,16 @@ task.spawn(function()
 						if hitbox then
 							if not hitbox:FindFirstChild("PlantBoxHandleAdornment") then
 								local adorn = Instance.new("BoxHandleAdornment")
-								adorn.Name         = "PlantBoxHandleAdornment"
-								adorn.Adornee      = hitbox
-								adorn.AlwaysOnTop  = true
-								adorn.ZIndex       = 0
-								adorn.Size         = hitbox.Size + Vector3.new(2,2,2)
-								adorn.Transparency = 0.3
-								adorn.Color3       = Color3.fromRGB(0,255,128)
-								adorn.Parent       = hitbox
+								adorn.Name="PlantBoxHandleAdornment"; adorn.Adornee=hitbox; adorn.AlwaysOnTop=true
+								adorn.ZIndex=0; adorn.Size=hitbox.Size+Vector3.new(2,2,2)
+								adorn.Transparency=0.3; adorn.Color3=Color3.fromRGB(0,255,128); adorn.Parent=hitbox
 							end
 							if not hitbox:FindFirstChild("PlantBeam") then
-								local beam  = Instance.new("Beam")
-								beam.Name   = "PlantBeam"
-								beam.Color  = ColorSequence.new(Color3.fromRGB(0,255,128))
-								beam.Width0 = 0.1; beam.Width1 = 0.1
-								local att0  = Instance.new("Attachment", speaker.Character:WaitForChild("HumanoidRootPart"))
-								local att1  = Instance.new("Attachment", hitbox)
-								beam.Attachment0 = att0; beam.Attachment1 = att1
-								beam.Parent = hitbox
+								local beam=Instance.new("Beam"); beam.Name="PlantBeam"
+								beam.Color=ColorSequence.new(Color3.fromRGB(0,255,128)); beam.Width0=0.1; beam.Width1=0.1
+								local att0=Instance.new("Attachment", speaker.Character:WaitForChild("HumanoidRootPart"))
+								local att1=Instance.new("Attachment", hitbox)
+								beam.Attachment0=att0; beam.Attachment1=att1; beam.Parent=hitbox
 							end
 						end
 					end
@@ -1650,16 +1783,29 @@ task.spawn(function()
 	end
 end)
 
--- Shop Item Watcher loop (runs every 30 seconds when enabled)
+-- Frog auto-collect loop
+task.spawn(function()
+	while getgenv().scriptRunning do
+		task.wait(3)
+		if autoCollect.frog then
+			task.spawn(tryCollectFrog, true)  -- silent = suppress redundant notify
+		end
+	end
+end)
+
+-- Shop Item Watcher loop (every 30s + on NightBegin via event above)
 task.spawn(function()
 	while getgenv().scriptRunning do
 		task.wait(30)
 		if shopWatchEnabled and #watchedShopItems > 0 then
 			local hits = findWatchedItemsInShops()
-			for _, hit in pairs(hits) do
-				notifyShopItem(hit.itemName, hit.shopName, hit.price)
-				task.wait(0.4)
-			end
+			for _, hit in pairs(hits) do notifyShopItem(hit.itemName, hit.shopName, hit.price) task.wait(0.4) end
 		end
 	end
+end)
+
+-- Initial night event check on script load
+task.spawn(function()
+	task.wait(3)
+	checkAndNotifyNightEvents()
 end)

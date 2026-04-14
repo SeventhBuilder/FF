@@ -4,11 +4,10 @@
 
 local RunService        = game:GetService("RunService")
 local CoreGui           = game:GetService("CoreGui")
-local Players           = game:GetService("Players")
 local Workspace         = game:GetService("Workspace")
+local Players           = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local StarterGui        = game:GetService("StarterGui")
-local Lighting          = game:GetService("Lighting")
 
 for _, d in pairs(CoreGui:GetDescendants()) do
 	if d.Name == "SimpleSpy2" then d:Destroy(); Players.LocalPlayer:Kick("Unstable connection detected") end
@@ -16,8 +15,8 @@ end
 if CoreGui:FindFirstChild("RayfieldLibrary") then CoreGui:FindFirstChild("RayfieldLibrary"):Destroy() end
 getgenv().scriptRunning = false; task.wait(0.1); getgenv().scriptRunning = true
 
-local speaker = Players.LocalPlayer
-local Mouse   = speaker:GetMouse()
+local player = Players.LocalPlayer
+local Mouse   = player:GetMouse()
 
 -- =====================================================================
 -- STATE  (Rayfield declared early so all functions can reference it)
@@ -64,15 +63,15 @@ end
 -- TELEPORT
 -- =====================================================================
 local function teleportTo(pos)
-	repeat task.wait() until speaker.Character and speaker.Character:FindFirstChild("HumanoidRootPart")
+	repeat task.wait() until player.Character and player.Character:FindFirstChild("HumanoidRootPart")
 	if not Workspace.HOLE:FindFirstChild("HoleTPEntrance") then
 		repeat
-			local prev = speaker.Character.HumanoidRootPart.CFrame
-			speaker.Character.HumanoidRootPart.CFrame = CFrame.new(1304,96,-525)
-			task.wait(); speaker.Character.HumanoidRootPart.CFrame = prev; task.wait(1)
+			local prev = player.Character.HumanoidRootPart.CFrame
+			player.Character.HumanoidRootPart.CFrame = CFrame.new(1304,96,-525)
+			task.wait(); player.Character.HumanoidRootPart.CFrame = prev; task.wait(1)
 		until Workspace.HOLE:FindFirstChild("HoleTPEntrance")
 	end
-	local hrp = speaker.Character.HumanoidRootPart
+	local hrp = player.Character.HumanoidRootPart
 	if (hrp.Position - pos).Magnitude < 200 then
 		hrp.CFrame = CFrame.new(pos); task.wait(0.3)
 	else
@@ -90,9 +89,9 @@ end
 local function checkTP()
 	if not Workspace.HOLE:FindFirstChild("HoleTPEntrance") then
 		repeat
-			local prev = speaker.Character.HumanoidRootPart.CFrame
-			speaker.Character.HumanoidRootPart.CFrame = CFrame.new(1304,96,-525)
-			task.wait(); speaker.Character.HumanoidRootPart.CFrame = prev; task.wait(1)
+			local prev = player.Character.HumanoidRootPart.CFrame
+			player.Character.HumanoidRootPart.CFrame = CFrame.new(1304,96,-525)
+			task.wait(); player.Character.HumanoidRootPart.CFrame = prev; task.wait(1)
 		until Workspace.HOLE:FindFirstChild("HoleTPEntrance")
 	end
 end
@@ -235,15 +234,15 @@ end
 -- =====================================================================
 local TRAVELERS_NIGHT = {
 	{name="NPC_Strangeman",   label="Strangeman"},
-	{name="NPC_GreenGolem",   label="Green Golem"},
 	{name="NPC_ToasterJosh",  label="Toaster Josh"},
-}
-local TRAVELERS_DAY = {
 	{name="NPC_Stick",        label="Stick"},
-	{name="NPC_Construct",    label="Construct"},
-	{name="NPC_Giver",        label="Interdimensional Traveler"},
 	{name="NPC_Junkman",      label="Junkman"},
 	{name="NPC_Vhitmire",     label="Vhitmire"},
+}
+local TRAVELERS_DAY = {
+	{name="NPC_GreenGolem",   label="Green Golem"},
+	{name="NPC_Construct",    label="Construct"},
+	{name="NPC_Giver",        label="Interdimensional Traveler"},
 }
 
 local function findNPCInWorkspace(npcName)
@@ -325,7 +324,7 @@ connectEntityWatchers()
 -- FIREFLY GOTO
 -- =====================================================================
 local function teleportToFirefly(firefly)
-	local hrp = speaker.Character and speaker.Character:FindFirstChild("HumanoidRootPart")
+	local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
 	if not hrp then return end
 	checkTP()
 	local hole = Workspace.HOLE.HoleTPEntrance
@@ -340,7 +339,7 @@ local function teleportToFirefly(firefly)
 	if firefly.Parent then
 		repeat
 			if not ffarm then break end
-			hrp = speaker.Character and speaker.Character:FindFirstChild("HumanoidRootPart")
+			hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
 			if not hrp then break end
 			hrp.Anchored = true; hrp.CFrame = firefly.CFrame + Vector3.new(0,3,0); hrp.Anchored = false
 			task.wait()
@@ -944,7 +943,7 @@ end
 FeaturesTab:CreateSection("🐦 Animal Spawn Watcher")
 FeaturesTab:CreateLabel("Select an animal below to get notified when it spawns nearby.")
 FeaturesTab:CreateDropdown({Name="Add Animal to Watch", Options=ANIMAL_NAMES,
-	CurrentOption={""}, MultipleOptions=false, SearchEnabled=true,
+	CurrentOption={""}, MultipleOptions=true, SearchEnabled=true,
 	Callback=function(opt)
 		local name = opt[1]; if name == "" then return end
 		if entityWatchList[name] then
@@ -1003,10 +1002,10 @@ end})
 FeaturesTab:CreateSection("🧰 Abilities")
 FeaturesTab:CreateButton({Name="Remove Fog", Callback=function()
 	pcall(function()
-		if speaker.PlayerScripts:FindFirstChild("Fog") then speaker.PlayerScripts.Fog:Destroy() end
-		if speaker.Character:FindFirstChild("Fogbox") then
+		if player.PlayerScripts:FindFirstChild("Fog") then player.PlayerScripts.Fog:Destroy() end
+		if player.Character:FindFirstChild("Fogbox") then
 			for _, ring in pairs({"Ring1","Ring2","Ring3"}) do
-				local r = speaker.Character.Fogbox:FindFirstChild(ring); if r then r:Destroy() end
+				local r = player.Character.Fogbox:FindFirstChild(ring); if r then r:Destroy() end
 			end
 		end
 	end)
@@ -1085,17 +1084,7 @@ TeleportsTab:CreateDropdown({Name="Overworld Location", SearchEnabled=true, Curr
 	},
 	Callback=function(opt) if OVERWORLD_TP[opt[1]] then teleportTo(OVERWORLD_TP[opt[1]]) end end})
 
-TeleportsTab:CreateSection("👺 Ratboy's Nightmare — Buttons")
-TeleportsTab:CreateDropdown({Name="Buttons", SearchEnabled=true, CurrentOption={""}, MultipleOptions=false,
-	Options={"Blue Button","Cyan (Teal) Button","Green Button","Orange Button","Pink Button","Purple Button","Red Button","Yellow Button"},
-	Callback=function(opt) if RATBOY_BUTTONS_TP[opt[1]] then teleportTo(RATBOY_BUTTONS_TP[opt[1]]) end end})
-
-TeleportsTab:CreateSection("👺 Ratboy's Nightmare — Doors")
-TeleportsTab:CreateDropdown({Name="Doors", SearchEnabled=true, CurrentOption={""}, MultipleOptions=false,
-	Options={"Blue Door","Cyan (Teal) Door","Green Door","Orange Door","Pink Door","Purple Door","Red Door","Yellow Door"},
-	Callback=function(opt) if RATBOY_DOORS_TP[opt[1]] then teleportTo(RATBOY_DOORS_TP[opt[1]]) end end})
-
-TeleportsTab:CreateSection("👺 Ratboy's Nightmare — Locations")
+TeleportsTab:CreateSection("👺 Ratboy's Nightmare")
 TeleportsTab:CreateDropdown({Name="Locations", SearchEnabled=true, CurrentOption={""}, MultipleOptions=false,
 	Options={
 		"Back of The Theatre","End of the Road","Fish Hall","Inside","Maze of the Root","Meeting Place","MYSTERY STORE",
@@ -1104,6 +1093,12 @@ TeleportsTab:CreateDropdown({Name="Locations", SearchEnabled=true, CurrentOption
 		"The Supermarket","The Theatre","The Vault","Waiting Room",
 	},
 	Callback=function(opt) if RATBOY_LOC_TP[opt[1]] then teleportTo(RATBOY_LOC_TP[opt[1]]) end end})
+TeleportsTab:CreateDropdown({Name="Buttons", SearchEnabled=true, CurrentOption={""}, MultipleOptions=false,
+	Options={"Blue Button","Cyan (Teal) Button","Green Button","Orange Button","Pink Button","Purple Button","Red Button","Yellow Button"},
+	Callback=function(opt) if RATBOY_BUTTONS_TP[opt[1]] then teleportTo(RATBOY_BUTTONS_TP[opt[1]]) end end})
+TeleportsTab:CreateDropdown({Name="Doors", SearchEnabled=true, CurrentOption={""}, MultipleOptions=false,
+	Options={"Blue Door","Cyan (Teal) Door","Green Door","Orange Door","Pink Door","Purple Door","Red Door","Yellow Door"},
+	Callback=function(opt) if RATBOY_DOORS_TP[opt[1]] then teleportTo(RATBOY_DOORS_TP[opt[1]]) end end})
 
 TeleportsTab:CreateSection("🏠 Housing")
 TeleportsTab:CreateDropdown({Name="Housing Location", SearchEnabled=true, CurrentOption={""}, MultipleOptions=false,
@@ -1111,9 +1106,11 @@ TeleportsTab:CreateDropdown({Name="Housing Location", SearchEnabled=true, Curren
 	Callback=function(opt) if HOUSING_TP[opt[1]] then teleportTo(HOUSING_TP[opt[1]]) end end})
 
 TeleportsTab:CreateSection("🧑‍💼 Vendors")
-TeleportsTab:CreateButton({Name="Amy Thistlewitch", Callback=function() teleportTo(VENDOR_TP["Amy Thistlewitch"]) end})
-TeleportsTab:CreateButton({Name="Arbewhy",          Callback=function() teleportTo(VENDOR_TP["Arbewhy"]) end})
-TeleportsTab:CreateButton({Name="Archaeologist",    Callback=function() teleportTo(VENDOR_TP["Archaeologist"]) end})
+	Options={"Amy Thistlewitch","Arbewhy","Archaeologist"},
+	Callback=function(opt) if VENDOR_TP[opt[1]] then teleportTo(VENDOR_TP[opt[1]]) end end})
+-- TeleportsTab:CreateButton({Name="Amy Thistlewitch", Callback=function() teleportTo(VENDOR_TP["Amy Thistlewitch"]) end})
+-- TeleportsTab:CreateButton({Name="Arbewhy",          Callback=function() teleportTo(VENDOR_TP["Arbewhy"]) end})
+-- TeleportsTab:CreateButton({Name="Archaeologist",    Callback=function() teleportTo(VENDOR_TP["Archaeologist"]) end})
 
 TeleportsTab:CreateSection("🚪 Entrances")
 for _, ev in pairs(ENTRANCES) do
@@ -1134,8 +1131,8 @@ PlayerTab:CreateToggle({Name="Noclip", CurrentValue=false, Flag="Noclip", Callba
 	Clip = not v
 	if v then
 		Noclipping = RunService.Stepped:Connect(function()
-			if not Clip and speaker.Character then
-				for _, child in pairs(speaker.Character:GetDescendants()) do
+			if not Clip and player.Character then
+				for _, child in pairs(player.Character:GetDescendants()) do
 					if child:IsA("BasePart") and child.CanCollide then child.CanCollide = false end
 				end
 			end
@@ -1235,9 +1232,10 @@ end})
 
 PlayerTab:CreateButton({Name="B-Tools", Callback=function()
 	for _,v in pairs(Workspace:GetDescendants()) do if v:IsA("BasePart") then v.Locked=false end end
-	for i=1,4 do local t=Instance.new("HopperBin"); t.BinType=i; t.Parent=speaker:FindFirstChildOfClass("Backpack") end
+	for i=1,4 do local t=Instance.new("HopperBin"); t.BinType=i; t.Parent=player:FindFirstChildOfClass("Backpack") end
 	Rayfield:Notify({Title="B-Tools", Content="Added to backpack!", Duration=3})
 end})
+
 PlayerTab:CreateButton({Name="Infinite Yield", Callback=function()
 	loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"))()
 end})
@@ -1271,7 +1269,6 @@ task.spawn(function()
 	end})
 
 	ShopsTab:CreateSection("🔔 Item Watcher")
-	ShopsTab:CreateLabel("Type an item name. A toggle will appear below — uncheck to stop watching.")
 	ShopsTab:CreateInput({Name="Watch Item", PlaceholderText="Exact item name...", RemoveTextAfterFocus=true,
 		Callback=function(value)
 			if not value or value == "" then return end
@@ -1405,7 +1402,7 @@ SettingsTab:CreateButton({Name="Exit Hub", Callback=function()
 	ffarm=false; bfarm=false; dfarm=false; lfarm=false; espToggles.plants=false; watchedShopItems={}
 	plants={}; plantNames={}; loweredPlantNames={}
 	pcall(function()
-		local hum = speaker.Character:FindFirstChildWhichIsA("Humanoid")
+		local hum = player.Character:FindFirstChildWhichIsA("Humanoid")
 		if hum then hum.WalkSpeed=16; hum.JumpPower=50; hum.MaxSlopeAngle=89 end
 		Workspace.Gravity = 196.2; NOFLY()
 		if Noclipping then Noclipping:Disconnect() end
@@ -1421,13 +1418,13 @@ end})
 -- FLY FUNCTIONS
 -- =====================================================================
 function sFLY()
-	repeat task.wait() until speaker.Character and speaker.Character:FindFirstChild("HumanoidRootPart")
+	repeat task.wait() until player.Character and player.Character:FindFirstChild("HumanoidRootPart")
 	if flyKeyDown then flyKeyDown:Disconnect() end; if flyKeyUp then flyKeyUp:Disconnect() end
-	local T=speaker.Character.HumanoidRootPart; local C={F=0,B=0,L=0,R=0}; local S=0
+	local T=player.Character.HumanoidRootPart; local C={F=0,B=0,L=0,R=0}; local S=0
 	local BG=Instance.new("BodyGyro"); local BV=Instance.new("BodyVelocity")
 	BG.P=9e4; BG.maxTorque=Vector3.new(9e9,9e9,9e9); BG.Parent=T
 	BV.maxForce=Vector3.new(9e9,9e9,9e9); BV.Parent=T; FLYING=true
-	local hum=speaker.Character:FindFirstChildOfClass("Humanoid"); if hum then hum.PlatformStand=true end
+	local hum=player.Character:FindFirstChildOfClass("Humanoid"); if hum then hum.PlatformStand=true end
 	flyKeyDown=Mouse.KeyDown:Connect(function(k) k=k:lower()
 		if k=="w" then C.F=iyflyspeed elseif k=="s" then C.B=-iyflyspeed
 		elseif k=="a" then C.L=-iyflyspeed elseif k=="d" then C.R=iyflyspeed end end)
@@ -1440,14 +1437,14 @@ function sFLY()
 			BG.CFrame=Workspace.CurrentCamera.CoordinateFrame
 		until not FLYING
 		BG:Destroy(); BV:Destroy()
-		local h2=speaker.Character and speaker.Character:FindFirstChildOfClass("Humanoid"); if h2 then h2.PlatformStand=false end
+		local h2=player.Character and player.Character:FindFirstChildOfClass("Humanoid"); if h2 then h2.PlatformStand=false end
 	end)
 end
 
 function NOFLY()
 	FLYING=false
 	if flyKeyDown then flyKeyDown:Disconnect() end; if flyKeyUp then flyKeyUp:Disconnect() end
-	local hum=speaker.Character and speaker.Character:FindFirstChildOfClass("Humanoid"); if hum then hum.PlatformStand=false end
+	local hum=player.Character and player.Character:FindFirstChildOfClass("Humanoid"); if hum then hum.PlatformStand=false end
 end
 
 -- =====================================================================
@@ -1456,7 +1453,7 @@ end
 task.spawn(function()
 	while getgenv().scriptRunning do
 		task.wait()
-		local hum=speaker.Character and speaker.Character:FindFirstChildWhichIsA("Humanoid")
+		local hum=player.Character and player.Character:FindFirstChildWhichIsA("Humanoid")
 		if hum then hum.MaxSlopeAngle=sangle; hum.WalkSpeed=walkspeed; hum.JumpPower=jumppower end
 		Workspace.Gravity=gravity
 	end
@@ -1551,7 +1548,7 @@ task.spawn(function()
 							if not hitbox:FindFirstChild("PlantBeam") then
 								local beam=Instance.new("Beam"); beam.Name="PlantBeam"
 								beam.Color=ColorSequence.new(Color3.fromRGB(0,255,128)); beam.Width0=0.1; beam.Width1=0.1
-								local att0=Instance.new("Attachment", speaker.Character:WaitForChild("HumanoidRootPart"))
+								local att0=Instance.new("Attachment", player.Character:WaitForChild("HumanoidRootPart"))
 								local att1=Instance.new("Attachment", hitbox)
 								beam.Attachment0=att0; beam.Attachment1=att1; beam.Parent=hitbox
 							end

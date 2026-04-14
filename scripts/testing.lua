@@ -943,7 +943,7 @@ end
 FeaturesTab:CreateSection("🐦 Animal Spawn Watcher")
 FeaturesTab:CreateLabel("Select an animal below to get notified when it spawns nearby.")
 FeaturesTab:CreateDropdown({Name="Add Animal to Watch", Options=ANIMAL_NAMES,
-	CurrentOption={""}, MultipleOptions=true, SearchEnabled=true,
+	CurrentOption={""}, MultipleOptions=false, SearchEnabled=true,
 	Callback=function(opt)
 		local name = opt[1]; if name == "" then return end
 		if entityWatchList[name] then

@@ -78,16 +78,16 @@ itemInfoById = {}
 itemInfoByLowerName = {}
 
 -- Entity watchers (animals, collectibles, monsters, travelers)
-entityWatchList = {}     -- [instanceName] = {label, active, notify, esp, entityType}
-travelerWatchList = {}   -- [instanceName] = {label, active, notify, esp, isNight}
+local entityWatchList = {}     -- [instanceName] = {label, active, notify, esp, entityType}
+local travelerWatchList = {}   -- [instanceName] = {label, active, notify, esp, isNight}
 
 -- Paragraph UI elements
-presentStatusParagraph = nil
-frogStatusParagraph    = nil
-entranceParagraphs     = {}   -- [key] = paragraph element
-updateTrackedPlantStatus
-setFlyJump
-cleanupHub
+local presentStatusParagraph = nil
+local frogStatusParagraph    = nil
+local entranceParagraphs     = {}   -- [key] = paragraph element
+local updateTrackedPlantStatus
+local setFlyJump
+local cleanupHub
 
 -- =====================================================================
 -- UTILITY: Number formatting  (1000000 -> "1,000,000")
@@ -1662,7 +1662,7 @@ end)
 WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
 
 local ActualWindow = WindUI:CreateWindow({
-	Title = "FF Hub",
+	Title = "Fantastic Frontier Hub",
 	Icon = "compass",
 	Author = "by SeventhBuilder",
 	Folder = "FFHub",
@@ -2824,7 +2824,7 @@ SettingsTab:CreateSection("Theme")
 SettingsTab:CreateLabel("Window toggle key: RightShift")
 SettingsTab:CreateDropdown({Name="Theme", SearchEnabled=true,
 	Options=getThemeOptions(),
-	CurrentOption={WindUI:GetCurrentTheme() or "Crimson"}, Flag="Theme",
+	CurrentOption={"Crimson" or WindUI:GetCurrentTheme()}, Flag="Theme",
 	Callback=function(opt)
 		local themeName = opt[1]
 		if themeName and themeName ~= "" then

@@ -703,13 +703,13 @@ local OVERWORLD_TP = {
 	["Upper Island"]=Vector3.new(-1361,35,-2278),
 }
 local RATBOY_BUTTONS_TP = {
-	["Blue Button"]=Vector3.new(7285,172,-2549), ["Cyan (Teal) Button"]=Vector3.new(7203,244,2235),
+	["Blue Button"]=Vector3.new(7285,172,-2549), ["Cyan Button"]=Vector3.new(7203,244,2235),
 	["Green Button"]=Vector3.new(7926,157,-3546), ["Orange Button"]=Vector3.new(7129,143,-1587),
 	["Pink Button"]=Vector3.new(7208,154,-1717), ["Purple Button"]=Vector3.new(7297,147,-1701),
 	["Red Button"]=Vector3.new(7261,200,-2147), ["Yellow Button"]=Vector3.new(8510,214,-1242),
 }
 local RATBOY_DOORS_TP = {
-	["Blue Door"]=Vector3.new(7149,169,-1621), ["Cyan (Teal) Door"]=Vector3.new(7794,204,2212),
+	["Blue Door"]=Vector3.new(7149,169,-1621), ["Cyan Door"]=Vector3.new(7794,204,2212),
 	["Green Door"]=Vector3.new(7298,171,-2543), ["Orange Door"]=Vector3.new(6985,141,-1635),
 	["Pink Door"]=Vector3.new(7163,168,-1742), ["Purple Door"]=Vector3.new(7021,141,-1689),
 	["Red Door"]=Vector3.new(7229,168,-814), ["Yellow Door"]=Vector3.new(7195,168,-1638),
@@ -2267,7 +2267,6 @@ WorldTab:CreateButton({
 })
 
 PlantsTab:CreateSection("Plant Tracker")
-PlantsTab:CreateLabel("Use Settings > ESP for global ESP toggles.")
 trackerDropdowns.plants = PlantsTab:CreateDropdown({
 	Name = "Plants to Track",
 	Options = plantDropdownOptions,
@@ -2374,7 +2373,7 @@ AutoFarmTab:CreateDropdown({Name="Deli Mode", Options={"Both (Random)","Short Wa
 AutoFarmTab:CreateToggle({Name="Deli AutoFarm", CurrentValue=false, Flag="DeliFarm",
 	Callback=function(v) dfarm=v; if v then teleportTo(Vector3.new(7066,144,-1621)); task.wait(3) end; Rayfield:Notify({Title="AutoFarm", Content="Deli "..(v and "ON" or "OFF"), Duration=2}) end})
 
-AutoFarmTab:CreateSection("💀 The Lost  (PATCHED — Requires Hidden Key)")
+AutoFarmTab:CreateSection("💀 The Lost (PATCHED) — Requires Hidden Key")
 AutoFarmTab:CreateToggle({Name="Lost AutoFarm", CurrentValue=false, Flag="LostFarm",
 	Callback=function(v)
 		if v then
@@ -2434,10 +2433,10 @@ TeleportsTab:CreateDropdown({Name="Locations", SearchEnabled=true, CurrentOption
 	},
 	Callback=function(opt) if RATBOY_LOC_TP[opt[1]] then teleportTo(RATBOY_LOC_TP[opt[1]]) end end})
 TeleportsTab:CreateDropdown({Name="Buttons", SearchEnabled=true, CurrentOption={""}, MultipleOptions=false,
-	Options={"Blue Button","Cyan (Teal) Button","Green Button","Orange Button","Pink Button","Purple Button","Red Button","Yellow Button"},
+	Options={"Blue Button","Cyan Button","Green Button","Orange Button","Pink Button","Purple Button","Red Button","Yellow Button"},
 	Callback=function(opt) if RATBOY_BUTTONS_TP[opt[1]] then teleportTo(RATBOY_BUTTONS_TP[opt[1]]) end end})
 TeleportsTab:CreateDropdown({Name="Doors", SearchEnabled=true, CurrentOption={""}, MultipleOptions=false,
-	Options={"Blue Door","Cyan (Teal) Door","Green Door","Orange Door","Pink Door","Purple Door","Red Door","Yellow Door"},
+	Options={"Blue Door","Cyan Door","Green Door","Orange Door","Pink Door","Purple Door","Red Door","Yellow Door"},
 	Callback=function(opt) if RATBOY_DOORS_TP[opt[1]] then teleportTo(RATBOY_DOORS_TP[opt[1]]) end end})
 
 TeleportsTab:CreateSection("🏠 Housing")
@@ -2662,7 +2661,7 @@ task.spawn(function()
 		else Rayfield:Notify({Title="Shops", Content="Can't find "..selectedShopName.."'s position.", Duration=3}) end
 	end})
 
-	ShopsTab:CreateSection("Item Watcher")
+	ShopsTab:CreateSection("Item Tracker")
 	trackerDropdowns.shopItems = ShopsTab:CreateDropdown({
 		Name = "Items to Watch",
 		Options = buildShopItemOptions(),

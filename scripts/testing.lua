@@ -1,24 +1,24 @@
 -- ============================================================
---  FF Hub  |  Original by SeventhBuilder  |  v6
+--  FF Hub  |  Original by SeventhBuilder  |  v7
 -- ============================================================
 
-local RunService        = game:GetService("RunService")
-local CoreGui           = game:GetService("CoreGui")
-local Workspace         = game:GetService("Workspace")
-local Players           = game:GetService("Players")
-local Lighting			= game:GetService("Lighting")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local StarterGui        = game:GetService("StarterGui")
+RunService        = game:GetService("RunService")
+CoreGui           = game:GetService("CoreGui")
+Workspace         = game:GetService("Workspace")
+Players           = game:GetService("Players")
+UserInputService  = game:GetService("UserInputService")
+Lighting			= game:GetService("Lighting")
+ReplicatedStorage = game:GetService("ReplicatedStorage")
+StarterGui        = game:GetService("StarterGui")
 
 for _, i in pairs(CoreGui:GetDescendants()) do
 	if i.Name == "SimpleSpy2" then i:Destroy(); Players.LocalPlayer:Kick("Unstable connection detected") end
 end
-if CoreGui:FindFirstChild("RayfieldLibrary") then CoreGui:FindFirstChild("RayfieldLibrary"):Destroy() end
 if getgenv().FFHubUnload then pcall(getgenv().FFHubUnload) end
 getgenv().scriptRunning = false; task.wait(0.1); getgenv().scriptRunning = true
 
-local player = Players.LocalPlayer
-local Mouse  = player:GetMouse()
+player = Players.LocalPlayer
+Mouse  = player:GetMouse()
 
 -- =====================================================================
 -- STATE  (Rayfield declared early so all functions can reference it)
@@ -38,7 +38,7 @@ local FLYING = false; local flyKeyDown, flyKeyUp
 local enabled = { present=false, frog=false, strangeman=false, pitfall=false, rabbithole=false, cosmic=false, gambler=false }
 local notif   = { present=true, frog=true, cosmic=true, gambler=true, firefly=true, birdnest=true, strangeman=true, rabbithole=true, pitfall=true }
 local autoCollect = { present=false, frog=false }
-local espToggles  = { plants=true, present=false, frog=true, strangeman=true, rabbithole=true, pitfall=true }
+local espToggles  = { plants=true, present=true, frog=true, strangeman=true, rabbithole=true, pitfall=true }
 
 local spawnersFolder = Workspace.Spawners
 local plants = {}; local plantNames = {}; local loweredPlantNames = {}
@@ -58,29 +58,102 @@ local spiderBodyMovers = {}
 local fastKillsEnabled = false
 local fastKillInitialized = false
 local fastKillTrackedHumanoids = setmetatable({}, {__mode="k"})
+local flyJumpEnabled = false
+local flyJumpConnection = nil
+local suppressWindowCloseNotice = false
+local runtimeConnections = {}
+local trackerDropdowns = {}
+local trackerSelections = {
+	plants = {},
+	animals = {},
+	monsters = {},
+	travelers = {},
+	collectibles = {},
+	shopItems = {},
+}
+trackedPlantStatusParagraphs = {}
+itemInfoCacheBuilt = false
+itemInfoEntriesCache = {}
+itemInfoById = {}
+itemInfoByLowerName = {}
 
 -- Entity watchers (animals, collectibles, monsters, travelers)
-local entityWatchList = {}     -- [instanceName] = {label, active, notify, esp, entityType}
-local travelerWatchList = {}   -- [instanceName] = {label, active, notify, esp, isNight}
+entityWatchList = {}     -- [instanceName] = {label, active, notify, esp, entityType}
+travelerWatchList = {}   -- [instanceName] = {label, active, notify, esp, isNight}
 
 -- Paragraph UI elements
-local presentStatusParagraph = nil
-local frogStatusParagraph    = nil
-local entranceParagraphs     = {}   -- [key] = paragraph element
+presentStatusParagraph = nil
+frogStatusParagraph    = nil
+entranceParagraphs     = {}   -- [key] = paragraph element
+updateTrackedPlantStatus
+setFlyJump
+cleanupHub
 
 -- =====================================================================
 -- UTILITY: Number formatting  (1000000 -> "1,000,000")
 -- =====================================================================
-local function formatNumber(n)
-	local s = tostring(math.floor(tonumber(n) or 0))
-	local result = s:reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "")
+function formatNumber(n)
+	s = tostring(math.floor(tonumber(n) or 0))
+	result = s:reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "")
 	return result
+end
+
+function connectSignal(signal, callback)
+	local connection = signal:Connect(callback)
+	table.insert(runtimeConnections, connection)
+	return connection
+end
+
+function disconnectRuntimeConnections()
+	for index = #runtimeConnections, 1, -1 do
+		local connection = runtimeConnections[index]
+		runtimeConnections[index] = nil
+		if connection then
+			pcall(function() connection:Disconnect() end)
+		end
+	end
+end
+
+function normalizeSelectionList(value)
+	local normalized = {}
+	if type(value) == "table" then
+		for _, option in ipairs(value) do
+			if option and option ~= "" then
+				normalized[option] = true
+			end
+		end
+	elseif type(value) == "string" and value ~= "" then
+		normalized[value] = true
+	end
+	return normalized
+end
+
+function getSelectionValues(selectionMap)
+	local values = {}
+	for optionLabel, isSelected in pairs(selectionMap or {}) do
+		if isSelected then
+			table.insert(values, optionLabel)
+		end
+	end
+	table.sort(values, function(a, b)
+		return string.lower(a) < string.lower(b)
+	end)
+	return values
+end
+
+function setDropdownSelection(dropdownKey)
+	local dropdown = trackerDropdowns[dropdownKey]
+	if dropdown then
+		pcall(function()
+			dropdown:Select(getSelectionValues(trackerSelections[dropdownKey]))
+		end)
+	end
 end
 
 -- =====================================================================
 -- TELEPORT
 -- =====================================================================
-local function teleportTo(pos)
+function teleportTo(pos)
 	repeat task.wait() until player.Character and player.Character:FindFirstChild("HumanoidRootPart")
 	if not Workspace.HOLE:FindFirstChild("HoleTPEntrance") then
 		repeat
@@ -104,7 +177,7 @@ local function teleportTo(pos)
 	end
 end
 
-local function checkTP()
+function checkTP()
 	if not Workspace.HOLE:FindFirstChild("HoleTPEntrance") then
 		repeat
 			local prev = player.Character.HumanoidRootPart.CFrame
@@ -117,7 +190,7 @@ end
 -- =====================================================================
 -- ESP HELPERS
 -- =====================================================================
-local function addHighlightESP(adornee, fillColor, outlineColor, tag)
+function addHighlightESP(adornee, fillColor, outlineColor, tag)
 	if not adornee or adornee:FindFirstChild(tag.."_HL") then return end
 	local hl = Instance.new("Highlight")
 	hl.Name = tag.."_HL"; hl.Adornee = adornee
@@ -128,7 +201,7 @@ local function addHighlightESP(adornee, fillColor, outlineColor, tag)
 	hl.Parent = adornee
 end
 
-local function addBillboardESP(part, text, color, tag)
+function addBillboardESP(part, text, color, tag)
 	if not part or part:FindFirstChild(tag.."_BB") then return end
 	local anchor = Instance.new("Part")
 	anchor.Name = tag.."_BB"; anchor.Size = Vector3.new(0.1,0.1,0.1)
@@ -143,7 +216,7 @@ local function addBillboardESP(part, text, color, tag)
 	lbl.TextStrokeTransparency = 0.3; lbl.TextStrokeColor3 = Color3.new(0,0,0)
 end
 
-local function removeESP(instance, tag)
+function removeESP(instance, tag)
 	if not instance then return end
 	local hl = instance:FindFirstChild(tag.."_HL"); if hl then hl:Destroy() end
 	for _, child in pairs(instance:GetDescendants()) do
@@ -151,7 +224,7 @@ local function removeESP(instance, tag)
 	end
 end
 
-local function applyEntranceESP(entrance, tag, color, label)
+function applyEntranceESP(entrance, tag, color, label)
 	if not entrance then return end
 	local part = entrance:IsA("BasePart") and entrance or entrance:FindFirstChildWhichIsA("BasePart", true)
 	addHighlightESP(entrance, color, Color3.new(1,1,1), tag)
@@ -159,12 +232,12 @@ local function applyEntranceESP(entrance, tag, color, label)
 	entranceESPTracker[tag] = entrance
 end
 
-local function clearEntranceESP(tag)
+function clearEntranceESP(tag)
 	local e = entranceESPTracker[tag]; if e then removeESP(e, tag) end
 	entranceESPTracker[tag] = nil
 end
 
-local function updateParagraph(paraRef, title, content)
+function updateParagraph(paraRef, title, content)
 	if not paraRef then return end
 	pcall(function()
 		if paraRef.Set then
@@ -207,7 +280,7 @@ local ENTRANCES = {
 }
 
 -- Apply ESP for an entrance and update its paragraph
-local function refreshEntranceStatus(ev)
+function refreshEntranceStatus(ev)
 	local entrance = ev.getEntrance()
 	local para = entranceParagraphs[ev.key]
 	if entrance then
@@ -222,7 +295,7 @@ local function refreshEntranceStatus(ev)
 	end
 end
 
-local function teleportEntrance(ev)
+function teleportEntrance(ev)
 	if not enabled[ev.key] then
 		Rayfield:Notify({Title=ev.label, Content="Enable it first in Features.", Duration=3}) return
 	end
@@ -233,7 +306,7 @@ local function teleportEntrance(ev)
 	else Rayfield:Notify({Title=ev.label, Content="Entrance has no teleport part.", Duration=3}) end
 end
 
-local function onNightBeginEntrances()
+function onNightBeginEntrances()
 	for _, ev in pairs(ENTRANCES) do
 		clearEntranceESP(ev.key)
 		task.spawn(function()
@@ -270,7 +343,7 @@ local TRAVELERS_DAY = {
 	{name="NPC_Giver",        label="Interdimensional Traveler"},
 }
 
-local function findNPCInWorkspace(npcName)
+function findNPCInWorkspace(npcName)
 	local npcs = Workspace:FindFirstChild("NPCS")
 	if npcs then
 		local found = npcs:FindFirstChild(npcName)
@@ -279,7 +352,7 @@ local function findNPCInWorkspace(npcName)
 	return Workspace:FindFirstChild(npcName)
 end
 
-local function notifyAndTeleportNPC(npcName, label)
+function notifyAndTeleportNPC(npcName, label)
 	local entry = travelerWatchList[npcName]
 	if not entry or not entry.active then return end
 	local npc = findNPCInWorkspace(npcName)
@@ -301,7 +374,7 @@ local function notifyAndTeleportNPC(npcName, label)
 	end
 end
 
-local function checkAllTravelers(list)
+function checkAllTravelers(list)
 	for _, t in pairs(list) do
 		notifyAndTeleportNPC(t.name, t.label)
 	end
@@ -311,7 +384,7 @@ end
 -- ENTITY WATCHER  (animals, nightmare collectibles, world monsters)
 -- =====================================================================
 -- Single notification helper for generic entities
-local function notifyEntity(instance, label, entityType)
+function notifyEntity(instance, label, entityType)
 	local part = instance:IsA("BasePart") and instance or instance:FindFirstChildWhichIsA("BasePart", true)
 	local bindable = Instance.new("BindableFunction")
 	bindable.OnInvoke = function()
@@ -324,7 +397,7 @@ local function notifyEntity(instance, label, entityType)
 	})
 end
 
-local function onInstanceAdded(instance)
+function onInstanceAdded(instance)
 	local entry = entityWatchList[instance.Name]
 	if entry and entry.active then
 		if entry.esp then applyTrackedInstanceESP(instance, entry)
@@ -338,14 +411,14 @@ local function onInstanceAdded(instance)
 end
 
 -- Connect watchers to workspace and NPCS folder
-local function connectEntityWatchers()
-	Workspace.ChildAdded:Connect(onInstanceAdded)
+function connectEntityWatchers()
+	connectSignal(Workspace.ChildAdded, onInstanceAdded)
 	local npcs = Workspace:FindFirstChild("NPCS")
-	if npcs then npcs.ChildAdded:Connect(onInstanceAdded) end
+	if npcs then connectSignal(npcs.ChildAdded, onInstanceAdded) end
 	-- Also watch for NPCS folder being added
-	Workspace.ChildAdded:Connect(function(child)
+	connectSignal(Workspace.ChildAdded, function(child)
 		if child.Name == "NPCS" then
-			child.ChildAdded:Connect(onInstanceAdded)
+			connectSignal(child.ChildAdded, onInstanceAdded)
 		end
 	end)
 end
@@ -354,7 +427,7 @@ connectEntityWatchers()
 -- =====================================================================
 -- FIREFLY GOTO
 -- =====================================================================
-local function teleportToFirefly(firefly)
+function teleportToFirefly(firefly)
 	local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
 	if not hrp then return end
 	checkTP()
@@ -384,7 +457,7 @@ end
 -- =====================================================================
 -- FROG HELPER
 -- =====================================================================
-local function updateFrogParagraph()
+function updateFrogParagraph()
 	if not frogStatusParagraph then return end
 	if not enabled.frog then
 		updateParagraph(frogStatusParagraph, "🐸 Frog Status", "Frog feature is disabled.")
@@ -414,7 +487,7 @@ local function updateFrogParagraph()
 	end
 end
 
-local function tryCollectFrog(doCollect)
+function tryCollectFrog(doCollect)
 	if not enabled.frog then
 		if Rayfield then Rayfield:Notify({Title="Frog", Content="Enable Grateful Frog first.", Duration=2}) end
 		return
@@ -481,33 +554,30 @@ local function tryCollectFrog(doCollect)
 	updateFrogParagraph()
 end
 
-local function iterateTrackedPlantInstances(entry, callback)
+function iterateTrackedPlantInstances(entry, callback)
 	if not entry then return end
 	if entry.special == "frog" then
-		local spawner = spawnersFolder:FindFirstChild("The Sprutle Frog Expansion_Updated")
-		local frogSpawner = spawner and spawner:FindFirstChild("Spawner_GratefulFrogs")
-		local collectible = frogSpawner and frogSpawner:FindFirstChild("Collectible")
-		local part = collectible and collectible:FindFirstChildWhichIsA("BasePart")
+		spawner = spawnersFolder:FindFirstChild("The Sprutle Frog Expansion_Updated")
+		frogSpawner = spawner and spawner:FindFirstChild("Spawner_GratefulFrogs")
+		collectible = frogSpawner and frogSpawner:FindFirstChild("Collectible")
+		part = collectible and collectible:FindFirstChildWhichIsA("BasePart")
 		if collectible then
 			callback(collectible, part)
 		end
 		return
 	end
 
-	for _, obj in ipairs(spawnersFolder:GetDescendants()) do
-		if obj:IsA("IntValue") and obj.Name == "Item" and obj.Parent and obj.Parent.Name == "Info" then
-			if tonumber(obj.Value) == entry.itemId then
-				local model = obj.Parent.Parent
-				local part = model and (model:FindFirstChild("HitBox") or model:FindFirstChildWhichIsA("BasePart", true))
-				if model then
-					callback(model, part)
-				end
-			end
+	scannedPlants = scanTrackedPlantInstances()
+	bucket = scannedPlants[entry.key]
+	if not bucket then return end
+	for model, part in pairs(bucket) do
+		if model and model.Parent and part and part.Parent then
+			callback(model, part)
 		end
 	end
 end
 
-local function notifyTrackedPlant(entry, model, part)
+function notifyTrackedPlant(entry, model, part)
 	if not entry or not entry.notify or not model or notifiedInstances[model] then return end
 	notifiedInstances[model] = true
 	local bindable = Instance.new("BindableFunction")
@@ -525,7 +595,7 @@ local function notifyTrackedPlant(entry, model, part)
 	})
 end
 
-local function autoCollectTrackedPlant(entry, model, part)
+function autoCollectTrackedPlant(entry, model, part)
 	if not entry or not entry.autoCollect or not model or autoCollectedInstances[model] then return end
 	autoCollectedInstances[model] = true
 	task.spawn(function()
@@ -549,13 +619,45 @@ local function autoCollectTrackedPlant(entry, model, part)
 	end)
 end
 
-local function processTrackedPlants()
+function processTrackedPlants()
+	local scannedPlants = scanTrackedPlantInstances()
 	for _, entry in pairs(trackedPlantEntries) do
 		if entry.active then
-			iterateTrackedPlantInstances(entry, function(model, part)
-				notifyTrackedPlant(entry, model, part)
-				autoCollectTrackedPlant(entry, model, part)
-			end)
+			local count = 0
+			if entry.special == "frog" then
+				iterateTrackedPlantInstances(entry, function(model, part)
+					count += 1
+					if entry.esp and espToggles.frog then
+						addHighlightESP(model, ENTITY_COLORS.Plant, Color3.new(1, 1, 1), "FrogESP")
+						if part then
+							addBillboardESP(part, entry.label, ENTITY_COLORS.Plant, "FrogESP")
+						end
+					else
+						removeESP(model, "FrogESP")
+					end
+					notifyTrackedPlant(entry, model, part)
+					autoCollectTrackedPlant(entry, model, part)
+				end)
+			else
+				local tag = getPlantESPTag(entry)
+				local bucket = scannedPlants[entry.key]
+				if bucket then
+					for model, part in pairs(bucket) do
+						count += 1
+						if entry.esp and espToggles.plants then
+							addHighlightESP(model, ENTITY_COLORS.Plant, Color3.new(1, 1, 1), tag)
+							if part then
+								addBillboardESP(part, entry.label, ENTITY_COLORS.Plant, tag)
+							end
+						else
+							removeESP(model, tag)
+						end
+						notifyTrackedPlant(entry, model, part)
+						autoCollectTrackedPlant(entry, model, part)
+					end
+				end
+			end
+			updateTrackedPlantStatus(entry, count)
 		end
 	end
 end
@@ -563,17 +665,17 @@ end
 -- =====================================================================
 -- DELI HELPERS
 -- =====================================================================
-local function ringBell() pcall(function() ReplicatedStorage.Events.Deli:FireServer("RingBell"); Players.LocalPlayer.PlayerGui.DeliGui.BellButton.Visible = false end) task.wait() end
-local function hideNotifications() pcall(function() if Players.LocalPlayer.PlayerGui.Notification.Enabled then Players.LocalPlayer.PlayerGui.Notification.Enabled = false end end) task.wait() end
-local function sitAtDeliBooth() pcall(function() Workspace.Deli.Booth1.InteractEvent:FireServer() end) task.wait() end
-local function hideDialogs() pcall(function() if Players.LocalPlayer.PlayerGui.Dialog.Main.Visible then Players.LocalPlayer.PlayerGui.Dialog.Main.Visible = false end end) task.wait() end
-local function skipInitialDeliDialog() pcall(function() Workspace.Deli.Booth1.WaiterLocation.Dialog2.D.D1.D1.E.RE1:FireServer() end) task.wait() end
+function ringBell() pcall(function() ReplicatedStorage.Events.Deli:FireServer("RingBell"); Players.LocalPlayer.PlayerGui.DeliGui.BellButton.Visible = false end) task.wait() end
+function hideNotifications() pcall(function() if Players.LocalPlayer.PlayerGui.Notification.Enabled then Players.LocalPlayer.PlayerGui.Notification.Enabled = false end end) task.wait() end
+function sitAtDeliBooth() pcall(function() Workspace.Deli.Booth1.InteractEvent:FireServer() end) task.wait() end
+function hideDialogs() pcall(function() if Players.LocalPlayer.PlayerGui.Dialog.Main.Visible then Players.LocalPlayer.PlayerGui.Dialog.Main.Visible = false end end) task.wait() end
+function skipInitialDeliDialog() pcall(function() Workspace.Deli.Booth1.WaiterLocation.Dialog2.D.D1.D1.E.RE1:FireServer() end) task.wait() end
 
 -- =====================================================================
 -- SELL LOST ITEMS
 -- =====================================================================
 local LOST_ITEM_IDS = {982,2223,2224,2225,2276,2228,2229,825,2233,2239,2240,2241,2280,2246,2247,2249,2250,2251,2252,2254,2256,2257,2258,203,2260,2261,2262,1435,205,407}
-local function sellLostItems() for _, id in pairs(LOST_ITEM_IDS) do pcall(function() ReplicatedStorage.Events.SellShop:FireServer(id, Workspace.Shops.Sellers, 1) end) end end
+function sellLostItems() for _, id in pairs(LOST_ITEM_IDS) do pcall(function() ReplicatedStorage.Events.SellShop:FireServer(id, Workspace.Shops.Sellers, 1) end) end end
 
 -- =====================================================================
 -- TELEPORT TABLES
@@ -676,6 +778,20 @@ local MONSTER_NPC_NAMES = {
 	"FirstKnightNPC","GreenPirateNPC","RedFloatingMonsterHeadNPC","CosmicFloatingMonsterHeadNPC",
 }
 
+local PLANT_TRACK_NAMES = {
+	"Lakethistles","RozierFlowers","LemonFlowers","PearlFlowers","PlumboFlowers","StrangemanFlowers",
+	"Clamstacks","SandCorals","Shells","StrangemanShells","Falichen","HungryFlowers","AbandonedFlowers",
+	"SunFlowers","MoonFlowers","LoolFlowers","FifeFlowers","Gorbacabbages","FruitStacks","TravelerPlants",
+	"TheObjectFromEarth","AngryBushdwellers","GratefulFrogs","BrownMushrooms","FlattyMushrooms",
+	"FantasticMushrooms","PortabatoMushrooms","TargetMushrooms","BrainMushrooms","GlowMushrooms",
+	"YellowBalloonMushrooms","BobberMushrooms","GrugbugMushrooms","HoneyMushrooms","LumooreMushrooms",
+	"PurpleBalloonMushrooms","SprutleMushrooms","MoonMushrooms","SnowballMushrooms","IcemMushrooms",
+	"ElephantMushrooms","NightmareMushrooms","MushtacheMushrooms","StrangemanMushrooms",
+	"RisingStarMushrooms","BoombaMushrooms","MaroonMushrooms","BirdsNest","Dragonroot","PendulumPlant",
+	"EmosMushrooms","AuspiciousCharm","LittleForest","PipeMachine","PlungerColony","Plucky",
+	"SmallTitan","MedTitan","LargeTitan",
+}
+
 -- =====================================================================
 -- DISPLAY HELPERS / CATALOGS
 -- =====================================================================
@@ -696,6 +812,13 @@ local DISPLAY_NAME_OVERRIDES = {
 	NPC_GreenGolem = "Green Golem",
 	NPC_Construct = "Construct",
 	NPC_Giver = "Interdimensional Traveler",
+	GratefulFrogs = "Grateful Frog",
+	BirdsNest = "Bird Nest",
+	TheObjectFromEarth = "The Object From Earth",
+	AngryBushdwellers = "Angry Bushdwellers",
+	SmallTitan = "Small Titan",
+	MedTitan = "Medium Titan",
+	LargeTitan = "Large Titan",
 }
 
 local ENTITY_COLORS = {
@@ -726,11 +849,11 @@ local FAST_KILL_SUPER_UNSAFE_NAMES = {
 	Ratboy = true,
 }
 
-local function sanitizeTag(text)
+function sanitizeTag(text)
 	return tostring(text or "Tracked"):gsub("[^%w_]", "")
 end
 
-local function toDisplayName(rawName)
+function toDisplayName(rawName)
 	if DISPLAY_NAME_OVERRIDES[rawName] then
 		return DISPLAY_NAME_OVERRIDES[rawName]
 	end
@@ -746,13 +869,13 @@ local function toDisplayName(rawName)
 	return clean
 end
 
-local function sortEntriesByDisplayName(entries)
+function sortEntriesByDisplayName(entries)
 	table.sort(entries, function(a, b)
 		return string.lower(a.displayName or "") < string.lower(b.displayName or "")
 	end)
 end
 
-local function buildOptionLookup(entries)
+function buildOptionLookup(entries)
 	local labels, lookup, usedLabels = {}, {}, {}
 	for _, entry in ipairs(entries) do
 		local label = entry.displayName
@@ -768,54 +891,45 @@ local function buildOptionLookup(entries)
 	return labels, lookup
 end
 
-local function buildItemInfoEntries()
-	local entries = {}
-	for _, info in ipairs(ReplicatedStorage.ItemInfo:GetChildren()) do
-		local id = tonumber(info.Name)
-		local fullName = info:FindFirstChild("FullName")
-		if id and fullName and fullName.Value ~= "" then
-			table.insert(entries, {
-				key = "item:" .. id,
-				itemId = id,
-				displayName = fullName.Value,
-			})
-		end
-	end
-	sortEntriesByDisplayName(entries)
-	return entries
-end
-
-local function buildPlantOptions()
-	local itemNameById = {}
-	for _, info in ipairs(buildItemInfoEntries()) do
-		itemNameById[info.itemId] = info.displayName
-	end
-
-	local seenItemIds = {}
-	local entries = {}
-
-	for _, obj in ipairs(spawnersFolder:GetDescendants()) do
-		if obj:IsA("IntValue") and obj.Name == "Item" and obj.Parent and obj.Parent.Name == "Info" then
-			local itemId = tonumber(obj.Value)
-			local displayName = itemNameById[itemId]
-			if itemId and displayName and not seenItemIds[itemId] then
-				seenItemIds[itemId] = true
-				table.insert(entries, {
-					key = "plant:" .. itemId,
-					itemId = itemId,
-					displayName = displayName,
-					entityType = "Plant",
-				})
+function buildItemInfoEntries()
+	if not itemInfoCacheBuilt then
+		local entries = {}
+		for index, info in ipairs(ReplicatedStorage.ItemInfo:GetChildren()) do
+			local id = tonumber(info.Name)
+			local fullName = info:FindFirstChild("FullName")
+			if id and fullName and fullName.Value ~= "" then
+				local entry = {
+					key = "item:" .. id,
+					itemId = id,
+					displayName = fullName.Value,
+				}
+				table.insert(entries, entry)
+				itemInfoById[id] = entry
+				itemInfoByLowerName[string.lower(fullName.Value)] = entry
+			end
+			if index % 250 == 0 then
+				task.wait()
 			end
 		end
+		sortEntriesByDisplayName(entries)
+		itemInfoEntriesCache = entries
+		itemInfoCacheBuilt = true
 	end
+	itemInfoCacheBuilt = true
+end
 
-	table.insert(entries, {
-		key = "frog",
-		displayName = "Grateful Frog",
-		special = "frog",
-		entityType = "Plant",
-	})
+function buildPlantOptions()
+	local entries = {}
+
+	for _, plantName in ipairs(PLANT_TRACK_NAMES) do
+		table.insert(entries, {
+			key = plantName,
+			workspaceName = plantName,
+			displayName = toDisplayName(plantName),
+			entityType = "Plant",
+			special = plantName == "GratefulFrogs" and "frog" or nil,
+		})
+	end
 
 	sortEntriesByDisplayName(entries)
 	local labels, lookup = buildOptionLookup(entries)
@@ -823,7 +937,7 @@ local function buildPlantOptions()
 	return labels
 end
 
-local function buildEntityOptions(rawEntries, entityType)
+function buildEntityOptions(rawEntries, entityType)
 	local entries = {}
 	for _, raw in ipairs(rawEntries) do
 		table.insert(entries, {
@@ -837,7 +951,7 @@ local function buildEntityOptions(rawEntries, entityType)
 	return buildOptionLookup(entries)
 end
 
-local function buildTravelerOptions()
+function buildTravelerOptions()
 	local entries = {}
 	for _, traveler in ipairs(TRAVELERS_NIGHT) do
 		table.insert(entries, {
@@ -863,59 +977,103 @@ local function buildTravelerOptions()
 	return labels
 end
 
-local function buildShopItemOptions()
+function buildShopItemOptions()
 	local labels, lookup = buildOptionLookup(buildItemInfoEntries())
 	shopItemOptionLookup = lookup
 	return labels
 end
 
-local function clearPlantESPVisuals()
+function clearPlantESPVisuals()
 	for _, obj in ipairs(spawnersFolder:GetDescendants()) do
 		if obj.Name == "PlantBoxHandleAdornment"
 			or obj.Name == "PlantBeam"
 			or obj.Name == "PlantBeamAttachment0"
-			or obj.Name == "PlantBeamAttachment1" then
+			or obj.Name == "PlantBeamAttachment1"
+			or string.find(obj.Name, "^TrackedPlant_") then
 			obj:Destroy()
-		end
-	end
-	if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-		for _, child in ipairs(player.Character.HumanoidRootPart:GetChildren()) do
-			if child.Name == "PlantBeamAttachment0" then
-				child:Destroy()
-			end
 		end
 	end
 end
 
-local function rebuildPlantSelectionCache()
+function rebuildPlantSelectionCache()
 	plants = {}
 	plantNames = {}
 	loweredPlantNames = {}
 	for _, entry in pairs(trackedPlantEntries) do
-		if entry.active and entry.itemId and entry.esp then
-			table.insert(plants, entry.itemId)
+		if entry.active and entry.workspaceName and entry.esp then
+			table.insert(plants, entry.workspaceName)
 			table.insert(plantNames, entry.displayName)
 			table.insert(loweredPlantNames, string.lower(entry.displayName))
 		end
 	end
 end
 
-local function getTrackedInstancePart(instance)
+function getPlantESPTag(entry)
+	return sanitizeTag("TrackedPlant_" .. tostring(entry and entry.key or "Unknown"))
+end
+
+function resolveTrackedPlantTarget(instance)
+	if not instance then return nil, nil end
+	local model = instance
+	if not instance:IsA("Model") and not instance:IsA("Folder") then
+		model = instance:FindFirstAncestorOfClass("Model") or instance.Parent or instance
+	end
+	local part
+	if model and model.FindFirstChild then
+		part = model:FindFirstChild("HitBox") or model:FindFirstChildWhichIsA("BasePart", true)
+	end
+	if not part and instance:IsA("BasePart") then
+		part = instance
+	end
+	return model or instance, part
+end
+
+function scanTrackedPlantInstances()
+	local activeNames = {}
+	local foundByKey = {}
+	for key, entry in pairs(trackedPlantEntries) do
+		if entry.active and entry.workspaceName and not entry.special then
+			activeNames[entry.workspaceName] = entry
+			foundByKey[key] = {}
+		end
+	end
+	if next(activeNames) == nil then
+		return foundByKey
+	end
+	for index, descendant in ipairs(spawnersFolder:GetDescendants()) do
+		local entry = activeNames[descendant.Name]
+		if entry then
+			local model, part = resolveTrackedPlantTarget(descendant)
+			if model and part then
+				local bucket = foundByKey[entry.key]
+				if bucket and not bucket[model] then
+					bucket[model] = part
+				end
+			end
+		end
+		if index % 250 == 0 then
+			task.wait()
+		end
+	end
+	return foundByKey
+end
+
+function getTrackedInstancePart(instance)
 	if not instance then return nil end
 	return instance:IsA("BasePart") and instance or instance:FindFirstChildWhichIsA("BasePart", true)
 end
 
-local function getEntityESPTag(instanceName, entityType)
+function getEntityESPTag(instanceName, entityType)
 	return sanitizeTag("Tracked_" .. tostring(entityType or "Entity") .. "_" .. tostring(instanceName or "Unknown"))
 end
 
-local function findEntityInWorkspace(instanceName)
+function findEntityInWorkspace(instanceName)
 	local npc = findNPCInWorkspace(instanceName)
 	if npc then return npc end
 	return Workspace:FindFirstChild(instanceName, true)
 end
 
-local function applyTrackedInstanceESP(instance, entry)
+function applyTrackedInstanceESP(instance, entry)
 	if not instance or not entry or not entry.esp then return end
 	local color = ENTITY_COLORS[entry.entityType] or Color3.fromRGB(255, 255, 255)
 	local tag = getEntityESPTag(instance.Name, entry.entityType)
@@ -926,18 +1084,18 @@ local function applyTrackedInstanceESP(instance, entry)
 	end
 end
 
-local function clearTrackedInstanceESP(instance, entry)
+function clearTrackedInstanceESP(instance, entry)
 	if not instance or not entry then return end
 	removeESP(instance, getEntityESPTag(instance.Name, entry.entityType))
 end
 
-local function notifyTrackedInstance(instance, entry)
+function notifyTrackedInstance(instance, entry)
 	if not instance or not entry or not entry.notify or notifiedInstances[instance] then return end
 	notifiedInstances[instance] = true
 	notifyEntity(instance, entry.label, entry.entityType)
 end
 
-local function refreshTrackedInstance(instanceName, entry)
+function refreshTrackedInstance(instanceName, entry)
 	local instance = findEntityInWorkspace(instanceName)
 	if not instance then return nil end
 	if entry.esp then applyTrackedInstanceESP(instance, entry)
@@ -946,7 +1104,7 @@ local function refreshTrackedInstance(instanceName, entry)
 	return instance
 end
 
-local function teleportToTrackedInstance(instanceName, label)
+function teleportToTrackedInstance(instanceName, label)
 	local instance = findEntityInWorkspace(instanceName)
 	local part = getTrackedInstancePart(instance)
 	if part then
@@ -956,7 +1114,7 @@ local function teleportToTrackedInstance(instanceName, label)
 	end
 end
 
-local function removeFogEffects()
+function removeFogEffects()
 	pcall(function()
 		if player.PlayerScripts:FindFirstChild("Fog") then
 			player.PlayerScripts.Fog:Destroy()
@@ -973,7 +1131,7 @@ local function removeFogEffects()
 	end)
 end
 
-local function clearSpiderBodyMovers()
+function clearSpiderBodyMovers()
 	for part, mover in pairs(spiderBodyMovers) do
 		if mover and mover.Parent then mover:Destroy() end
 		if part and part.Parent and part:IsA("BasePart") then
@@ -983,7 +1141,7 @@ local function clearSpiderBodyMovers()
 	spiderBodyMovers = {}
 end
 
-local function bringSpiderBossToPlayer()
+function bringSpiderBossToPlayer()
 	local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
 	if not hrp then
 		Rayfield:Notify({Title="Spider Boss", Content="Character is not ready yet.", Duration=3})
@@ -1010,38 +1168,51 @@ local function bringSpiderBossToPlayer()
 	end
 
 	clearSpiderBodyMovers()
+	local originalPivot = spider:GetPivot()
+	local targetPivot = CFrame.new(targetPosition) * (originalPivot - originalPivot.Position)
+	local baseParts = {}
 
 	for _, descendant in ipairs(spider:GetDescendants()) do
 		if descendant:IsA("BodyPosition") or descendant:IsA("BodyGyro") or descendant:IsA("AlignPosition") or descendant:IsA("AlignOrientation") then
 			descendant:Destroy()
+		elseif descendant:IsA("BasePart") then
+			descendant.CanCollide = false
+			descendant.AssemblyLinearVelocity = Vector3.zero
+			descendant.AssemblyAngularVelocity = Vector3.zero
+			table.insert(baseParts, descendant)
 		end
 	end
 
-	local movedParts = 0
-	for _, descendant in ipairs(spider:GetDescendants()) do
-		if descendant:IsA("BasePart") then
-			descendant.CanCollide = false
-			local mover = Instance.new("BodyPosition")
-			mover.Name = "SpiderBringBP"
-			mover.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-			mover.P = 50000
-			mover.D = 1500
-			mover.Position = targetPosition
-			mover.Parent = descendant
-			spiderBodyMovers[descendant] = mover
-			movedParts += 1
+	for _ = 1, 8 do
+		pcall(function()
+			spider:PivotTo(targetPivot)
+		end)
+		if spiderPart and spiderPart.Parent then
+			spiderPart.AssemblyLinearVelocity = Vector3.zero
+			spiderPart.AssemblyAngularVelocity = Vector3.zero
+		end
+		task.wait()
+	end
+
+	if spiderPart and (spiderPart.Position - targetPosition).Magnitude > 20 then
+		for _, part in ipairs(baseParts) do
+			local offset = originalPivot:ToObjectSpace(part.CFrame)
+			part.CFrame = targetPivot * offset
 		end
 	end
 
 	teleportTo(targetPosition + Vector3.new(0, 4, 16))
+	local finalPart = getTrackedInstancePart(spider)
+	local distance = finalPart and (finalPart.Position - targetPosition).Magnitude or math.huge
 	Rayfield:Notify({
 		Title="Spider Boss",
-		Content=("Moved spider boss to your location (%d parts)."):format(movedParts),
+		Content = distance <= 30 and "Spider boss moved to your location."
+			or "Spider boss move was attempted, but the server kept it away.",
 		Duration=5,
 	})
 end
 
-local function isFastKillPlayerHumanoid(humanoid)
+function isFastKillPlayerHumanoid(humanoid)
 	for _, onlinePlayer in ipairs(Players:GetPlayers()) do
 		if humanoid:FindFirstAncestor(onlinePlayer.Name) then
 			return true
@@ -1050,7 +1221,7 @@ local function isFastKillPlayerHumanoid(humanoid)
 	return false
 end
 
-local function isFastKillAnchoredModel(model)
+function isFastKillAnchoredModel(model)
 	for _, descendant in ipairs(model:GetDescendants()) do
 		if descendant:IsA("BasePart") and descendant.Anchored then
 			return true
@@ -1059,7 +1230,7 @@ local function isFastKillAnchoredModel(model)
 	return false
 end
 
-local function shouldInstantKillHumanoid(humanoid)
+function shouldInstantKillHumanoid(humanoid)
 	local model = humanoid:FindFirstAncestorOfClass("Model")
 	if not model then return false end
 	if FAST_KILL_UNSAFE_NAMES[model.Name] or FAST_KILL_SUPER_UNSAFE_NAMES[model.Name] then
@@ -1068,7 +1239,7 @@ local function shouldInstantKillHumanoid(humanoid)
 	return game.PlaceId == 963149987 and #Players:GetPlayers() == 1
 end
 
-local function tryFastKillHumanoid(humanoid, tracker)
+function tryFastKillHumanoid(humanoid, tracker)
 	if not fastKillsEnabled or not humanoid or humanoid.Health <= 0 or not tracker then return end
 	local model = humanoid:FindFirstAncestorOfClass("Model")
 	if not model or isFastKillAnchoredModel(model) then return end
@@ -1099,20 +1270,20 @@ local function tryFastKillHumanoid(humanoid, tracker)
 	end
 end
 
-local function hookFastKillHumanoid(humanoid)
+function hookFastKillHumanoid(humanoid)
 	if fastKillTrackedHumanoids[humanoid] or isFastKillPlayerHumanoid(humanoid) then return end
 	fastKillTrackedHumanoids[humanoid] = true
 
-	local function connectTracker(playerDamages)
+	function connectTracker(playerDamages)
 		local tracker = playerDamages:FindFirstChild(player.Name)
 		if not tracker then return end
 		tryFastKillHumanoid(humanoid, tracker)
-		tracker.Changed:Connect(function()
+		connectSignal(tracker.Changed, function()
 			tryFastKillHumanoid(humanoid, tracker)
 		end)
 	end
 
-	humanoid.ChildAdded:Connect(function(child)
+	connectSignal(humanoid.ChildAdded, function(child)
 		if child.Name == "PlayerDamages" then
 			task.wait()
 			connectTracker(child)
@@ -1133,7 +1304,7 @@ local function hookFastKillHumanoid(humanoid)
 	end
 end
 
-local function initializeFastKills()
+function initializeFastKills()
 	if fastKillInitialized then return end
 	fastKillInitialized = true
 
@@ -1143,14 +1314,14 @@ local function initializeFastKills()
 		end
 	end
 
-	Workspace.DescendantAdded:Connect(function(descendant)
+	connectSignal(Workspace.DescendantAdded, function(descendant)
 		if descendant:IsA("Humanoid") then
 			hookFastKillHumanoid(descendant)
 		end
 	end)
 end
 
-local function enableFastKills(state)
+function enableFastKills(state)
 	fastKillsEnabled = state
 	initializeFastKills()
 	if state then
@@ -1166,7 +1337,7 @@ local function enableFastKills(state)
 	end
 end
 
-local function createParagraphWrapper(paragraph)
+function createParagraphWrapper(paragraph)
 	return {
 		_actual = paragraph,
 		Set = function(_, opts)
@@ -1177,7 +1348,7 @@ local function createParagraphWrapper(paragraph)
 	}
 end
 
-local function getDropdownDefault(config)
+function getDropdownDefault(config)
 	local current = config.CurrentOption
 	if type(current) == "table" then
 		if config.MultipleOptions then
@@ -1190,10 +1361,10 @@ local function getDropdownDefault(config)
 	return current
 end
 
-local function createContainerWrapper(container)
+function createContainerWrapper(container)
 	local wrapper = { _actual = container, _current = nil }
 
-	local function getTarget()
+	function getTarget()
 		if wrapper._current and wrapper._current._actual then
 			return wrapper._current._actual
 		end
@@ -1203,11 +1374,27 @@ local function createContainerWrapper(container)
 	function wrapper:CreateSection(title)
 		local section = createContainerWrapper(wrapper._actual:Section({
 			Title = title,
-			Opened = true,
+			Opened = false,
 			Box = true,
 		}))
 		wrapper._current = section
 		return section
+	end
+
+	function wrapper:Destroy()
+		pcall(function()
+			if wrapper._actual and wrapper._actual.Destroy then
+				wrapper._actual:Destroy()
+			end
+		end)
+	end
+
+	function wrapper:SetTitle(title)
+		pcall(function()
+			if wrapper._actual and wrapper._actual.SetTitle then
+				wrapper._actual:SetTitle(title)
+			end
+		end)
 	end
 
 	function wrapper:CreateLabel(text)
@@ -1307,7 +1494,7 @@ end
 -- =====================================================================
 -- SHOP HELPERS
 -- =====================================================================
-local function getShopNames()
+function getShopNames()
 	local names = {}
 	if not Workspace:FindFirstChild("Shops") then return names end
 	for _, shop in pairs(Workspace.Shops:GetChildren()) do
@@ -1316,7 +1503,7 @@ local function getShopNames()
 	table.sort(names); return names
 end
 
-local function getShopPosition(shopName)
+function getShopPosition(shopName)
 	if shopPositionCache[shopName] then return shopPositionCache[shopName] end
 	local shops = Workspace:FindFirstChild("Shops"); if not shops then return nil end
 	local shop = shops:FindFirstChild(shopName); if not shop then return nil end
@@ -1325,48 +1512,52 @@ local function getShopPosition(shopName)
 	return nil
 end
 
-local function getShopItems(shopName)
+function getShopItems(shopName)
+	buildItemInfoEntries()
 	local shops = Workspace:FindFirstChild("Shops"); if not shops then return {} end
 	local shop = shops:FindFirstChild(shopName)
 	if not shop or not shop:FindFirstChild("Slots") then return {} end
 	local result = {}
-	for _, slot in pairs(shop.Slots:GetChildren()) do
+	for index, slot in ipairs(shop.Slots:GetChildren()) do
 		local itemSlot = slot:FindFirstChild("Item"); local priceSlot = slot:FindFirstChild("Price")
 		if itemSlot then
 			local itemId = tonumber(itemSlot.Value)
 			local price  = priceSlot and formatNumber(priceSlot.Value) or "?"
-			for _, info in pairs(ReplicatedStorage.ItemInfo:GetChildren()) do
-				if tonumber(info.Name) == itemId then
-					local fn = info:FindFirstChild("FullName")
-					if fn then table.insert(result, {name=fn.Value, price=price, id=itemId}) end
-					break
-				end
+			local entry = itemInfoById[itemId]
+			if entry then
+				table.insert(result, {name=entry.displayName, price=price, id=itemId})
 			end
+		end
+		if index % 25 == 0 then
+			task.wait()
 		end
 	end
 	return result
 end
 
-local function findWatchedItemsInShops()
+function findWatchedItemsInShops()
 	local found = {}; local shops = Workspace:FindFirstChild("Shops"); if not shops then return found end
-	for _, watched in pairs(watchedShopItems) do
+	for watchedIndex, watched in ipairs(watchedShopItems) do
 		if watched.active then
-			for _, shop in pairs(shops:GetChildren()) do
+			for shopIndex, shop in ipairs(shops:GetChildren()) do
 				if shop:FindFirstChild("Slots") then
-					for _, slot in pairs(shop.Slots:GetChildren()) do
+					for slotIndex, slot in ipairs(shop.Slots:GetChildren()) do
 						local iSlot = slot:FindFirstChild("Item"); local pSlot = slot:FindFirstChild("Price")
 						if iSlot and tonumber(iSlot.Value) == watched.id then
 							table.insert(found, {itemName=watched.name, shopName=shop.Name, price=pSlot and formatNumber(pSlot.Value) or "?"})
 						end
+						if slotIndex % 40 == 0 then task.wait() end
 					end
 				end
+				if shopIndex % 10 == 0 then task.wait() end
 			end
 		end
+		if watchedIndex % 10 == 0 then task.wait() end
 	end
 	return found
 end
 
-local function notifyShopItem(itemName, shopName, price)
+function notifyShopItem(itemName, shopName, price)
 	local bindable = Instance.new("BindableFunction")
 	bindable.OnInvoke = function()
 		local pos = getShopPosition(shopName)
@@ -1378,12 +1569,12 @@ local function notifyShopItem(itemName, shopName, price)
 	})
 end
 
-local function refreshShopWatcher()
+function refreshShopWatcher()
 	local hits = findWatchedItemsInShops()
 	for _, hit in pairs(hits) do notifyShopItem(hit.itemName, hit.shopName, hit.price); task.wait(0.3) end
 end
 
-local function buildShopItemsDisplay(shopName)
+function buildShopItemsDisplay(shopName)
 	if not shopItemParagraph then return end
 	if not shopName or shopName == "No shops found" then
 		updateParagraph(shopItemParagraph, "Shop Items", "Select a shop above."); return
@@ -1402,7 +1593,7 @@ end
 -- =====================================================================
 local LatestPresent = nil; local LatestPresentModel = nil
 
-local function updatePresentParagraph()
+function updatePresentParagraph()
 	if not presentStatusParagraph then return end
 	if not enabled.present then
 		updateParagraph(presentStatusParagraph, "🎁 Present Status", "Present feature is disabled."); return
@@ -1415,7 +1606,7 @@ local function updatePresentParagraph()
 	end
 end
 
-local function markPresent(part)
+function markPresent(part)
 	if not espToggles.present then return end
 	if part:FindFirstChild("PresentESP_BB") then return end
 	addBillboardESP(part, "🎁 PRESENT", Color3.fromRGB(255,80,80), "PresentESP")
@@ -1442,7 +1633,7 @@ presentBindable.OnInvoke = function()
 	end
 end
 
-local function onPresentFound(present)
+function onPresentFound(present)
 	repeat task.wait() until present:FindFirstChild("PP")
 	local part = present:FindFirstChildOfClass("Part")
 	if not part then return end
@@ -1461,7 +1652,7 @@ end
 for _, child in pairs(Workspace:GetChildren()) do
 	if string.sub(string.lower(child.Name),1,7) == "present" and #child.Name == 8 then task.spawn(onPresentFound, child) end
 end
-Workspace.ChildAdded:Connect(function(child)
+connectSignal(Workspace.ChildAdded, function(child)
 	if string.sub(string.lower(child.Name),1,7) == "present" and #child.Name == 8 then task.spawn(onPresentFound, child) end
 end)
 
@@ -1474,10 +1665,12 @@ local ActualWindow = WindUI:CreateWindow({
 	Title = "FF Hub",
 	Icon = "compass",
 	Author = "by SeventhBuilder",
-	--Folder = "FFHub",
+	Folder = "FFHub",
 	Size = UDim2.fromOffset(640, 470),
 	MinSize = Vector2.new(580, 360),
+	MaxSize = Vector2.new(920, 640),
 	Theme = "Dark",
+	ToggleKey = Enum.KeyCode.RightShift,
 	Transparent = true,
 	Resizable = true,
 	SideBarWidth = 190,
@@ -1515,27 +1708,39 @@ getgenv().FFHubUnload = function()
 	pcall(function() ActualWindow:Destroy() end)
 end
 
-local WorldTab     = createContainerWrapper(ActualWindow:Tab({Title = "World", Icon = "globe"}))
-local PlantsTab    = createContainerWrapper(ActualWindow:Tab({Title = "Plants", Icon = "leaf"}))
-local AnimalsTab   = createContainerWrapper(ActualWindow:Tab({Title = "Animals", Icon = "rabbit"}))
-local MonstersTab  = createContainerWrapper(ActualWindow:Tab({Title = "Monsters", Icon = "skull"}))
-local AutoFarmTab  = createContainerWrapper(ActualWindow:Tab({Title = "AutoFarm", Icon = "zap"}))
-local TeleportsTab = createContainerWrapper(ActualWindow:Tab({Title = "Teleports", Icon = "map"}))
-local PlayerTab    = createContainerWrapper(ActualWindow:Tab({Title = "Player", Icon = "user"}))
-local ShopsTab     = createContainerWrapper(ActualWindow:Tab({Title = "Shops", Icon = "shopping-cart"}))
-local SettingsTab  = createContainerWrapper(ActualWindow:Tab({Title = "Settings", Icon = "settings"}))
+ActualWindow:OnClose(function()
+	if suppressWindowCloseNotice then
+		return
+	end
+	WindUI:Notify({
+		Title = "FF Hub",
+		Content = "Press RightShift to reopen the window.",
+		Duration = 5,
+	})
+end)
 
-local plantDropdownOptions = buildPlantOptions()
-local animalDropdownOptions, animalLookup = buildEntityOptions(ANIMAL_NAMES, "Animal")
-local monsterDropdownOptions, monsterLookup = buildEntityOptions(MONSTER_NPC_NAMES, "Monster")
-local collectibleDropdownOptions, collectibleLookup = buildEntityOptions(NIGHTMARE_COLLECTIBLE_NAMES, "Collectible")
-local travelerDropdownOptions = buildTravelerOptions()
+
+WorldTab     = createContainerWrapper(ActualWindow:Tab({Title = "World", Icon = "globe"}))
+PlantsTab    = createContainerWrapper(ActualWindow:Tab({Title = "Plants", Icon = "leaf"}))
+AnimalsTab   = createContainerWrapper(ActualWindow:Tab({Title = "Animals", Icon = "rabbit"}))
+MonstersTab  = createContainerWrapper(ActualWindow:Tab({Title = "Monsters", Icon = "skull"}))
+AutoFarmTab  = createContainerWrapper(ActualWindow:Tab({Title = "AutoFarm", Icon = "zap"}))
+TeleportsTab = createContainerWrapper(ActualWindow:Tab({Title = "Teleports", Icon = "map"}))
+PlayerTab    = createContainerWrapper(ActualWindow:Tab({Title = "Player", Icon = "user"}))
+ShopsTab     = createContainerWrapper(ActualWindow:Tab({Title = "Shops", Icon = "shopping-cart"}))
+SettingsTab  = createContainerWrapper(ActualWindow:Tab({Title = "Settings", Icon = "settings"}))
+
+plantDropdownOptions = buildPlantOptions()
+animalDropdownOptions, animalLookup = buildEntityOptions(ANIMAL_NAMES, "Animal")
+monsterDropdownOptions, monsterLookup = buildEntityOptions(MONSTER_NPC_NAMES, "Monster")
+collectibleDropdownOptions, collectibleLookup = buildEntityOptions(NIGHTMARE_COLLECTIBLE_NAMES, "Collectible")
+travelerDropdownOptions = buildTravelerOptions()
 
 animalOptionLookup = animalLookup
 monsterOptionLookup = monsterLookup
 collectibleOptionLookup = collectibleLookup
 
-local function getThemeOptions()
+function getThemeOptions()
 	local themes = {}
 	local ok, themeTable = pcall(function() return WindUI:GetThemes() end)
 	if ok and type(themeTable) == "table" then
@@ -1552,7 +1757,7 @@ end
 
 StarterGui:SetCore("SendNotification", {Title="FF Hub", Text="Loaded! by SeventhBuilder"})
 
-ReplicatedStorage.Events.NightBegin.OnClientEvent:Connect(function()
+connectSignal(ReplicatedStorage.Events.NightBegin.OnClientEvent, function()
 	shopPositionCache = {}
 	task.wait(2)
 	onNightBeginEntrances()
@@ -1562,13 +1767,13 @@ ReplicatedStorage.Events.NightBegin.OnClientEvent:Connect(function()
 end)
 
 pcall(function()
-	ReplicatedStorage.Events.DayBegin.OnClientEvent:Connect(function()
+	connectSignal(ReplicatedStorage.Events.DayBegin.OnClientEvent, function()
 		task.wait(2)
 		checkAllTravelers(TRAVELERS_DAY)
 	end)
 end)
 
-local function findFirstTrackedPlantTarget(entry)
+function findFirstTrackedPlantTarget(entry)
 	local foundModel, foundPart = nil, nil
 	iterateTrackedPlantInstances(entry, function(model, part)
 		if not foundModel then
@@ -1578,7 +1783,7 @@ local function findFirstTrackedPlantTarget(entry)
 	return foundModel, foundPart
 end
 
-local function collectPlantEntryNow(entry)
+function collectPlantEntryNow(entry)
 	if not entry then return end
 	if entry.special == "frog" then
 		enabled.frog = true
@@ -1603,17 +1808,73 @@ local function collectPlantEntryNow(entry)
 	end
 end
 
-local function addTrackedPlant(optionLabel)
-	local data = plantOptionLookup[optionLabel]
-	if not data then return end
-	if trackedPlantEntries[data.key] then
-		Rayfield:Notify({Title="Plant Tracker", Content="Already tracking: " .. data.displayName, Duration=3})
+updateTrackedPlantStatus = function(entry, count)
+	if not entry then return end
+	if entry.section then
+		entry.section:SetTitle(("Tracked - %s (%d)"):format(entry.label, count))
+	end
+	local paragraph = trackedPlantStatusParagraphs[entry.key]
+	if paragraph then
+		updateParagraph(paragraph, "Status", "Exists: " .. tostring(count))
+	end
+end
+
+function clearTrackedPlantESP(entry)
+	if not entry then return end
+	if entry.special == "frog" then
+		iterateTrackedPlantInstances(entry, function(model)
+			removeESP(model, "FrogESP")
+		end)
 		return
 	end
+	local tag = getPlantESPTag(entry)
+	iterateTrackedPlantInstances(entry, function(model)
+		removeESP(model, tag)
+	end)
+end
+
+function removeTrackedPlant(optionLabel, keepSelection)
+	local data = plantOptionLookup[optionLabel]
+	if not data then return end
+	local entry = trackedPlantEntries[data.key]
+	if not entry then return end
+
+	clearTrackedPlantESP(entry)
+	if entry.section then
+		entry.section:Destroy()
+	end
+
+	trackedPlantStatusParagraphs[data.key] = nil
+	trackedPlantEntries[data.key] = nil
+
+	if entry.special == "frog" then
+		enabled.frog = false
+		autoCollect.frog = false
+		local frogSpawner = spawnersFolder:FindFirstChild("The Sprutle Frog Expansion_Updated")
+		frogSpawner = frogSpawner and frogSpawner:FindFirstChild("Spawner_GratefulFrogs")
+		if frogSpawner and frogSpawner:FindFirstChild("Collectible") then
+			removeESP(frogSpawner.Collectible, "FrogESP")
+		end
+	end
+
+	rebuildPlantSelectionCache()
+	updateFrogParagraph()
+
+	if not keepSelection then
+		trackerSelections.plants[optionLabel] = nil
+		setDropdownSelection("plants")
+	end
+end
+
+function addTrackedPlant(optionLabel)
+	local data = plantOptionLookup[optionLabel]
+	if not data then return end
+	if trackedPlantEntries[data.key] then return end
 
 	local entry = {
 		key = data.key,
-		itemId = data.itemId,
+		workspaceName = data.workspaceName,
+		optionLabel = optionLabel,
 		label = data.displayName,
 		displayName = data.displayName,
 		entityType = "Plant",
@@ -1634,7 +1895,8 @@ local function addTrackedPlant(optionLabel)
 
 	rebuildPlantSelectionCache()
 
-	local section = PlantsTab:CreateSection("Tracked - " .. entry.label)
+	local section = PlantsTab:CreateSection("Tracked - " .. entry.label .. " (0)")
+	entry.section = section
 	section:CreateToggle({
 		Name = "Notify",
 		CurrentValue = true,
@@ -1660,7 +1922,7 @@ local function addTrackedPlant(optionLabel)
 				end
 			else
 				rebuildPlantSelectionCache()
-				if not v then clearPlantESPVisuals() end
+				if not v then clearTrackedPlantESP(entry) end
 			end
 		end,
 	})
@@ -1675,6 +1937,10 @@ local function addTrackedPlant(optionLabel)
 	section:CreateButton({
 		Name = "Teleport",
 		Callback = function()
+			if entry.autoCollect then
+				collectPlantEntryNow(entry)
+				return
+			end
 			if entry.special == "frog" then
 				tryCollectFrog(false)
 			else
@@ -1693,20 +1959,56 @@ local function addTrackedPlant(optionLabel)
 			collectPlantEntryNow(entry)
 		end,
 	})
-
+	trackedPlantStatusParagraphs[entry.key] = section:CreateParagraph({
+		Title = "Status",
+		Content = "Exists: 0",
+	})
+	section:CreateButton({
+		Name = "Stop Tracking",
+		Callback = function()
+			removeTrackedPlant(optionLabel)
+		end,
+	})
+	
 	updateFrogParagraph()
 	Rayfield:Notify({Title="Plant Tracker", Content="Now tracking: " .. data.displayName, Duration=3})
 end
 
-local function addTrackedEntity(tabWrapper, lookupTable, storeTable, optionLabel, entityType)
+function removeTrackedEntity(selectionKey, lookupTable, storeTable, optionLabel, keepSelection)
 	local data = lookupTable[optionLabel]
 	if not data then return end
-	if storeTable[data.workspaceName] then
-		Rayfield:Notify({Title=entityType, Content="Already tracking: " .. data.displayName, Duration=3})
-		return
+	local entry = storeTable[data.workspaceName]
+	if not entry then return end
+
+	local instance = findEntityInWorkspace(data.workspaceName)
+	if instance then
+		clearTrackedInstanceESP(instance, entry)
 	end
+	if entry.section then
+		entry.section:Destroy()
+	end
+	storeTable[data.workspaceName] = nil
+	if data.workspaceName == "CosmicFloatingMonsterHeadNPC" then enabled.cosmic = false end
+	if data.workspaceName == "PathGamblerNPC" then enabled.gambler = false end
+
+	if not trackerSelections[selectionKey] then
+		trackerSelections[selectionKey] = {}
+	end
+	trackerSelections[selectionKey][optionLabel] = nil
+	if not keepSelection then
+		setDropdownSelection(selectionKey)
+	end
+end
+
+function addTrackedEntity(selectionKey, tabWrapper, lookupTable, storeTable, optionLabel, entityType)
+	local data = lookupTable[optionLabel]
+	if not data then return end
+	if storeTable[data.workspaceName] then return end
 
 	local entry = {
+		key = data.workspaceName,
+		optionLabel = optionLabel,
+		workspaceName = data.workspaceName,
 		label = data.displayName,
 		active = true,
 		notify = true,
@@ -1720,6 +2022,7 @@ local function addTrackedEntity(tabWrapper, lookupTable, storeTable, optionLabel
 	if data.workspaceName == "PathGamblerNPC" then enabled.gambler = true end
 
 	local section = tabWrapper:CreateSection("Tracked - " .. data.displayName)
+	entry.section = section
 	section:CreateToggle({
 		Name = "Notify",
 		CurrentValue = true,
@@ -1757,8 +2060,52 @@ local function addTrackedEntity(tabWrapper, lookupTable, storeTable, optionLabel
 		end,
 	})
 
+	section:CreateButton({
+		Name = "Stop Tracking",
+		Callback = function()
+			removeTrackedEntity(selectionKey, lookupTable, storeTable, optionLabel)
+		end,
+	})
+
 	refreshTrackedInstance(data.workspaceName, entry)
 	Rayfield:Notify({Title=entityType, Content="Now tracking: " .. data.displayName, Duration=3})
+end
+
+function syncTrackerSelections(selectionKey, selectedValues, addFn, removeFn)
+	local nextSelection = normalizeSelectionList(selectedValues)
+	local currentSelection = trackerSelections[selectionKey]
+
+	for optionLabel in pairs(currentSelection) do
+		if not nextSelection[optionLabel] then
+			currentSelection[optionLabel] = nil
+			removeFn(optionLabel, true)
+		end
+	end
+
+	for optionLabel in pairs(nextSelection) do
+		if not currentSelection[optionLabel] then
+			currentSelection[optionLabel] = true
+			addFn(optionLabel)
+		end
+	end
+end
+
+function destroyMatchingWorkspaceInstances(matchFn)
+	local removed = 0
+	local descendants = Workspace:GetDescendants()
+	for index = #descendants, 1, -1 do
+		local obj = descendants[index]
+		if matchFn(obj) then
+			removed += 1
+			pcall(function()
+				obj:Destroy()
+			end)
+		end
+		if index % 250 == 0 then
+			task.wait()
+		end
+	end
+	return removed
 end
 
 WorldTab:CreateSection("Present")
@@ -1772,14 +2119,14 @@ WorldTab:CreateToggle({
 	end,
 })
 WorldTab:CreateToggle({
-	Name = "Auto Collect on Teleport",
+	Name = "Auto Collect",
 	CurrentValue = false,
 	Callback = function(v)
 		autoCollect.present = v
 	end,
 })
 WorldTab:CreateButton({
-	Name = "Teleport to Latest Present",
+	Name = "Teleport to Present",
 	Callback = function()
 		if not enabled.present then
 			Rayfield:Notify({Title="Present", Content="Enable Present first.", Duration=2})
@@ -1840,59 +2187,68 @@ for _, ev in pairs(ENTRANCES) do
 end
 
 WorldTab:CreateSection("Traveler NPCs")
-WorldTab:CreateLabel("Day and night travelers now share one searchable dropdown.")
-WorldTab:CreateDropdown({
-	Name = "Add Traveler to Track",
+WorldTab:CreateLabel("Select multiple travelers. Selecting one again removes it from tracking.")
+trackerDropdowns.travelers = WorldTab:CreateDropdown({
+	Name = "Travelers to Track",
 	Options = travelerDropdownOptions,
-	CurrentOption = {""},
-	MultipleOptions = false,
+	CurrentOption = {},
+	MultipleOptions = true,
 	SearchEnabled = true,
 	Callback = function(opt)
-		local label = opt[1]
-		if label and label ~= "" then
-			addTrackedEntity(WorldTab, travelerOptionLookup, travelerWatchList, label, "Traveler")
-		end
-	end,
-})
-
-WorldTab:CreateSection("Nightmare Collectibles")
-WorldTab:CreateDropdown({
-	Name = "Add Collectible to Track",
-	Options = collectibleDropdownOptions,
-	CurrentOption = {""},
-	MultipleOptions = false,
-	SearchEnabled = true,
-	Callback = function(opt)
-		local label = opt[1]
-		if label and label ~= "" then
-			addTrackedEntity(WorldTab, collectibleOptionLookup, entityWatchList, label, "Collectible")
-		end
+		syncTrackerSelections("travelers", opt, function(label)
+			addTrackedEntity("travelers", WorldTab, travelerOptionLookup, travelerWatchList, label, "Traveler")
+		end, function(label)
+			removeTrackedEntity("travelers", travelerOptionLookup, travelerWatchList, label)
+		end)
 	end,
 })
 
 WorldTab:CreateSection("Performance")
 WorldTab:CreateButton({Name="Remove All Trees", Callback=function()
-	for _, obj in pairs(Workspace:GetDescendants()) do
-		for _, name in pairs({"PostTrees","Tree_A_1","Tree_B_1","Tree_B_2","Tree_C_1","Tree_D_1","Tree_D_2"}) do
-			if obj.Name == name then obj:Destroy() end
-		end
-	end
-	Rayfield:Notify({Title="Performance", Content="Trees removed!", Duration=3})
+	local treeNames = {
+		PostTrees = true,
+		Tree_A_1 = true,
+		Tree_B_1 = true,
+		Tree_B_2 = true,
+		Tree_C_1 = true,
+		Tree_D_1 = true,
+		Tree_D_2 = true,
+	}
+	local removed = destroyMatchingWorkspaceInstances(function(obj)
+		return treeNames[obj.Name] == true
+	end)
+	Rayfield:Notify({Title="Performance", Content=("Trees removed: %d"):format(removed), Duration=4})
 end})
+
 WorldTab:CreateButton({Name="Remove All Vegetation", Callback=function()
-	for _, obj in pairs(Workspace:GetDescendants()) do
-		for _, name in pairs({"GrassyRootSystemPart","BushLeafPart","LilyPadPart","FlowerPart","BushPart","CropPartSQ","GrassPart","TallGrassPartSmall","DeadShrubPart","PlantPart","Trunk","Root","Leaves","LeafPart","WeedPart"}) do
-			if obj.Name == name then obj:Destroy() end
-		end
-		if obj:IsA("MeshPart") and obj.MeshId == "rbxassetid://511992639" then obj:Destroy() end
-	end
-	Rayfield:Notify({Title="Performance", Content="Vegetation removed!", Duration=3})
+	local vegetationNames = {
+		GrassyRootSystemPart = true,
+		BushLeafPart = true,
+		LilyPadPart = true,
+		FlowerPart = true,
+		BushPart = true,
+		CropPartSQ = true,
+		GrassPart = true,
+		TallGrassPartSmall = true,
+		DeadShrubPart = true,
+		PlantPart = true,
+		Trunk = true,
+		Root = true,
+		Leaves = true,
+		LeafPart = true,
+		WeedPart = true,
+	}
+	local removed = destroyMatchingWorkspaceInstances(function(obj)
+		return vegetationNames[obj.Name] == true or (obj:IsA("MeshPart") and obj.MeshId == "rbxassetid://511992639")
+	end)
+	Rayfield:Notify({Title="Performance", Content=("Vegetation removed: %d"):format(removed), Duration=4})
 end})
+
 WorldTab:CreateButton({Name="Remove All Rocks", Callback=function()
-	for _, obj in pairs(Workspace:GetDescendants()) do
-		if obj.Name == "LargeRockPart" or obj.Name == "RockPart" then obj:Destroy() end
-	end
-	Rayfield:Notify({Title="Performance", Content="Rocks removed!", Duration=3})
+	local removed = destroyMatchingWorkspaceInstances(function(obj)
+		return obj.Name == "LargeRockPart" or obj.Name == "RockPart"
+	end)
+	Rayfield:Notify({Title="Performance", Content=("Rocks removed: %d"):format(removed), Duration=4})
 end})
 
 WorldTab:CreateSection("Utilities")
@@ -1911,33 +2267,15 @@ WorldTab:CreateButton({
 })
 
 PlantsTab:CreateSection("Plant Tracker")
-PlantsTab:CreateToggle({
-	Name = "Plant ESP",
-	CurrentValue = true,
-	Callback = function(v)
-		espToggles.plants = v
-		if not v then clearPlantESPVisuals() end
-		Rayfield:Notify({Title="Plant ESP", Content=v and "Enabled" or "Disabled", Duration=2})
-	end,
-})
-local plantDropdown = PlantsTab:CreateDropdown({
-	Name = "Add Plant to Track",
+PlantsTab:CreateLabel("Use Settings > ESP for global ESP toggles.")
+trackerDropdowns.plants = PlantsTab:CreateDropdown({
+	Name = "Plants to Track",
 	Options = plantDropdownOptions,
-	CurrentOption = {""},
-	MultipleOptions = false,
+	CurrentOption = {},
+	MultipleOptions = true,
 	SearchEnabled = true,
 	Callback = function(opt)
-		local label = opt[1]
-		if label and label ~= "" then
-			addTrackedPlant(label)
-		end
-	end,
-})
-PlantsTab:CreateButton({
-	Name = "Refresh Plant List",
-	Callback = function()
-		plantDropdown:Refresh(buildPlantOptions())
-		Rayfield:Notify({Title="Plant Tracker", Content="Plant dropdown refreshed.", Duration=2})
+		syncTrackerSelections("plants", opt, addTrackedPlant, removeTrackedPlant)
 	end,
 })
 frogStatusParagraph = PlantsTab:CreateParagraph({
@@ -1945,35 +2283,54 @@ frogStatusParagraph = PlantsTab:CreateParagraph({
 	Content = "Add Grateful Frog from the dropdown to begin tracking it here.",
 })
 
-AnimalsTab:CreateSection("Animal Tracker")
-AnimalsTab:CreateLabel("Select an animal to add notify, ESP, and teleport controls.")
-AnimalsTab:CreateDropdown({
-	Name = "Add Animal to Track",
-	Options = animalDropdownOptions,
-	CurrentOption = {""},
-	MultipleOptions = false,
+PlantsTab:CreateSection("Nightmare Collectibles")
+PlantsTab:CreateLabel("Select multiple collectibles. Selecting one again removes it from tracking.")
+trackerDropdowns.collectibles = PlantsTab:CreateDropdown({
+	Name = "Collectibles to Track",
+	Options = collectibleDropdownOptions,
+	CurrentOption = {},
+	MultipleOptions = true,
 	SearchEnabled = true,
 	Callback = function(opt)
-		local label = opt[1]
-		if label and label ~= "" then
-			addTrackedEntity(AnimalsTab, animalOptionLookup, entityWatchList, label, "Animal")
-		end
+		syncTrackerSelections("collectibles", opt, function(label)
+			addTrackedEntity("collectibles", PlantsTab, collectibleOptionLookup, entityWatchList, label, "Collectible")
+		end, function(label)
+			removeTrackedEntity("collectibles", collectibleOptionLookup, entityWatchList, label)
+		end)
+	end,
+})
+
+AnimalsTab:CreateSection("Animal Tracker")
+AnimalsTab:CreateLabel("Select multiple animals. Selecting one again removes it from tracking.")
+trackerDropdowns.animals = AnimalsTab:CreateDropdown({
+	Name = "Animals to Track",
+	Options = animalDropdownOptions,
+	CurrentOption = {},
+	MultipleOptions = true,
+	SearchEnabled = true,
+	Callback = function(opt)
+		syncTrackerSelections("animals", opt, function(label)
+			addTrackedEntity("animals", AnimalsTab, animalOptionLookup, entityWatchList, label, "Animal")
+		end, function(label)
+			removeTrackedEntity("animals", animalOptionLookup, entityWatchList, label)
+		end)
 	end,
 })
 
 MonstersTab:CreateSection("Monster Tracker")
-MonstersTab:CreateLabel("Select a monster to add notify, ESP, and teleport controls.")
-MonstersTab:CreateDropdown({
-	Name = "Add Monster to Track",
+MonstersTab:CreateLabel("Select multiple monsters. Selecting one again removes it from tracking.")
+trackerDropdowns.monsters = MonstersTab:CreateDropdown({
+	Name = "Monsters to Track",
 	Options = monsterDropdownOptions,
-	CurrentOption = {""},
-	MultipleOptions = false,
+	CurrentOption = {},
+	MultipleOptions = true,
 	SearchEnabled = true,
 	Callback = function(opt)
-		local label = opt[1]
-		if label and label ~= "" then
-			addTrackedEntity(MonstersTab, monsterOptionLookup, entityWatchList, label, "Monster")
-		end
+		syncTrackerSelections("monsters", opt, function(label)
+			addTrackedEntity("monsters", MonstersTab, monsterOptionLookup, entityWatchList, label, "Monster")
+		end, function(label)
+			removeTrackedEntity("monsters", monsterOptionLookup, entityWatchList, label)
+		end)
 	end,
 })
 
@@ -2118,15 +2475,20 @@ PlayerTab:CreateToggle({Name="Noclip", CurrentValue=false, Flag="Noclip", Callba
 				end
 			end
 		end)
-	else if Noclipping then Noclipping:Disconnect() end end
+	else if Noclipping then Noclipping:Disconnect(); Noclipping = nil end end
 end})
+
 PlayerTab:CreateToggle({Name="Fly", CurrentValue=false, Flag="Fly", Callback=function(v)
 	if v then NOFLY(); task.wait(); sFLY() else NOFLY() end
 end})
 
 PlayerTab:CreateSection("🛠 Tools")
+PlayerTab:CreateToggle({Name="FlyJump", CurrentValue=false, Flag="FlyJump", Callback=function(v)
+	setFlyJump(v)
+end})
+
 PlayerTab:CreateButton({Name="Telekinesis  [Hold=Grab | Q/E=Dist | R=Rot | T=Pull | Y=Fling]", Callback=function()
-	local function inject(obj, fn)
+	function inject(obj, fn)
 		local base = getfenv(fn)
 		setfenv(fn, setmetatable({}, {__index=function(_,k) return k=="script" and obj or base[k] end}))
 		return fn
@@ -2163,7 +2525,7 @@ PlayerTab:CreateButton({Name="Telekinesis  [Hold=Grab | Q/E=Dist | R=Rot | T=Pul
 		local cp=Instance.new("Part"); cp.Anchored=true; cp.CanCollide=false; cp.Locked=true; cp.Size=Vector3.new(1,1,1); cp.BrickColor=BrickColor.Black()
 		local cm=Instance.new("SpecialMesh",cp); cm.MeshType=Enum.MeshType.Sphere; cm.Scale=Vector3.new(0.7,0.7,0.7)
 		local tkh=tk.Handle; local bcs=tk.Handle
-		local function spawnBeam(f,t,c)
+		function spawnBeam(f,t,c)
 			local p1=Instance.new("ObjectValue"); p1.Name="Part1"; p1.Value=f
 			local p2=Instance.new("ObjectValue"); p2.Name="Part2"; p2.Value=t
 			local pr=Instance.new("ObjectValue"); pr.Name="Par"; pr.Value=c
@@ -2172,7 +2534,7 @@ PlayerTab:CreateButton({Name="Telekinesis  [Hold=Grab | Q/E=Dist | R=Rot | T=Pul
 			p1.Parent=bs; p2.Parent=bs; pr.Parent=bs; co.Parent=bs; bs.Parent=workspace
 			if t==grabbed then ovRef=p2 end
 		end
-		local function onMD(mouse)
+		function onMD(mouse)
 			if mdown then return end; mdown=true
 			task.spawn(function()
 				local c=cp:Clone(); c.Parent=tk; spawnBeam(tkh,c,workspace)
@@ -2189,7 +2551,7 @@ PlayerTab:CreateButton({Name="Telekinesis  [Hold=Grab | Q/E=Dist | R=Rot | T=Pul
 			bp=Instance.new("BodyPosition"); bp.MaxForce=Vector3.new(math.huge,math.huge,math.huge); bp.P=bp.P*1.1
 			if ovRef then ovRef.Value=nil end; grabbed=nil; ovRef=nil
 		end
-		local function onKD(k) k=k:lower()
+		function onKD(k) k=k:lower()
 			if k=="q" then gd=math.max(10,gd-10)
 			elseif k=="e" then gd=gd+10 elseif k=="t" then gd=10 elseif k=="y" then gd=200
 			elseif k=="r" then
@@ -2224,6 +2586,59 @@ end})
 -- =====================================================================
 -- SHOPS TAB
 -- =====================================================================
+function removeWatchedShopItem(optionLabel, keepSelection)
+	local data = shopItemOptionLookup[optionLabel]
+	if not data then return end
+	for index = #watchedShopItems, 1, -1 do
+		local entry = watchedShopItems[index]
+		if entry.id == data.itemId then
+			if entry.section then
+				entry.section:Destroy()
+			end
+			table.remove(watchedShopItems, index)
+			break
+		end
+	end
+	if not keepSelection then
+		trackerSelections.shopItems[optionLabel] = nil
+		setDropdownSelection("shopItems")
+	end
+end
+
+function addWatchedShopItem(optionLabel)
+	local data = shopItemOptionLookup[optionLabel]
+	if not data then return end
+	for _, entry in ipairs(watchedShopItems) do
+		if entry.id == data.itemId then
+			return
+		end
+	end
+
+	local entry = {
+		id = data.itemId,
+		name = data.displayName,
+		active = true,
+		optionLabel = optionLabel,
+	}
+	table.insert(watchedShopItems, entry)
+
+	local section = ShopsTab:CreateSection("Tracked Item - " .. data.displayName)
+	entry.section = section
+	section:CreateToggle({
+		Name = "Notify in Shops",
+		CurrentValue = true,
+		Callback = function(v)
+			entry.active = v
+		end,
+	})
+	section:CreateButton({
+		Name = "Stop Watching",
+		Callback = function()
+			removeWatchedShopItem(optionLabel)
+		end,
+	})
+end
+
 task.spawn(function()
 	repeat task.wait(0.2) until Workspace:FindFirstChild("Shops")
 	local shopNames = getShopNames()
@@ -2235,12 +2650,10 @@ task.spawn(function()
 		Callback=function(opt) selectedShopName=opt[1]; buildShopItemsDisplay(selectedShopName) end})
 	selectedShopName = shopNames[1]
 
-	ShopsTab:CreateButton({Name="Refresh Items", Callback=function() buildShopItemsDisplay(selectedShopName) end})
+	shopItemParagraph = ShopsTab:CreateParagraph({Title="Shop Items", Content="Select a shop above to view its inventory."})
+	buildShopItemsDisplay(selectedShopName)
 
-	-- Inline items display (no notifications)
-	shopItemParagraph = ShopsTab:CreateParagraph({Title="Shop Items", Content="Select a shop and click Refresh Items."})
-
-	ShopsTab:CreateButton({Name="📍 Teleport to Selected Shop", Callback=function()
+	ShopsTab:CreateButton({Name="Teleport to Selected Shop", Callback=function()
 		if not selectedShopName or selectedShopName == "No shops found" then
 			Rayfield:Notify({Title="Shops", Content="Select a shop first.", Duration=3}); return
 		end
@@ -2249,49 +2662,116 @@ task.spawn(function()
 		else Rayfield:Notify({Title="Shops", Content="Can't find "..selectedShopName.."'s position.", Duration=3}) end
 	end})
 
-	ShopsTab:CreateSection("🔔 Item Watcher")
-	ShopsTab:CreateInput({Name="Watch Item", PlaceholderText="Exact item name...", RemoveTextAfterFocus=true,
-		Callback=function(value)
-			if not value or value == "" then return end
-			for _, info in pairs(ReplicatedStorage.ItemInfo:GetChildren()) do
-				local fn = info:FindFirstChild("FullName")
-				if fn and string.lower(fn.Value) == string.lower(value) then
-					local id = tonumber(info.Name)
-					for _, w in pairs(watchedShopItems) do
-						if w.id == id then Rayfield:Notify({Title="Watch List", Content="Already watching: "..fn.Value, Duration=3}); return end
-					end
-					local entry = {id=id, name=fn.Value, active=true}
-					table.insert(watchedShopItems, entry)
-					ShopsTab:CreateToggle({Name="✓ "..fn.Value, CurrentValue=true,
-						Callback=function(v) entry.active = v end})
-					Rayfield:Notify({Title="Watch List", Content="Now watching: "..fn.Value, Duration=3}); return
-				end
-			end
-			Rayfield:Notify({Title="Watch List", Content="Item not found: "..value, Duration=3})
-		end})
+	ShopsTab:CreateSection("Item Watcher")
+	trackerDropdowns.shopItems = ShopsTab:CreateDropdown({
+		Name = "Items to Watch",
+		Options = buildShopItemOptions(),
+		CurrentOption = {},
+		MultipleOptions = true,
+		SearchEnabled = true,
+		Callback = function(opt)
+			syncTrackerSelections("shopItems", opt, addWatchedShopItem, removeWatchedShopItem)
+		end,
+	})
 end)
 
 -- =====================================================================
 -- SETTINGS TAB
 -- =====================================================================
-SettingsTab:CreateSection("🔔 Notifications")
-SettingsTab:CreateToggle({Name="Present Notifications",    CurrentValue=true, Flag="NotifPresent",    Callback=function(v) notif.present=v end})
-SettingsTab:CreateToggle({Name="Frog Notifications",       CurrentValue=true, Flag="NotifFrog",       Callback=function(v) notif.frog=v end})
-SettingsTab:CreateToggle({Name="Cosmic Ghost Notifications",CurrentValue=true, Flag="NotifCosmic",    Callback=function(v) notif.cosmic=v end})
-SettingsTab:CreateToggle({Name="Path Gambler Notifications",CurrentValue=true, Flag="NotifGambler",   Callback=function(v) notif.gambler=v end})
-SettingsTab:CreateToggle({Name="Firefly Notifications",    CurrentValue=true, Flag="NotifFirefly",    Callback=function(v) notif.firefly=v end})
-SettingsTab:CreateToggle({Name="Bird Nest Notifications",  CurrentValue=true, Flag="NotifBird",       Callback=function(v) notif.birdnest=v end})
-SettingsTab:CreateToggle({Name="Strangeman Notifications", CurrentValue=true, Flag="NotifStrangeman", Callback=function(v) notif.strangeman=v end})
-SettingsTab:CreateToggle({Name="Rabbit Hole Notifications",CurrentValue=true, Flag="NotifRabbithole", Callback=function(v) notif.rabbithole=v end})
-SettingsTab:CreateToggle({Name="Pitfall Notifications",    CurrentValue=true, Flag="NotifPitfall",    Callback=function(v) notif.pitfall=v end})
-
-local spawnersFolder = Workspace.Spawners
-for _, v in pairs(spawnersFolder:GetDescendants()) do
-	if v.Name == "PlantBoxHandleAdornment" or v.Name == "PlantBeam" then v:Destroy() end
+setFlyJump = function(state)
+	flyJumpEnabled = state
+	if flyJumpConnection then
+		flyJumpConnection:Disconnect()
+		flyJumpConnection = nil
+	end
+	if not state then
+		return
+	end
+	flyJumpConnection = UserInputService.JumpRequest:Connect(function()
+		if not flyJumpEnabled or not getgenv().scriptRunning then return end
+		local character = player.Character
+		local hum = character and character:FindFirstChildWhichIsA("Humanoid")
+		local hrp = character and character:FindFirstChild("HumanoidRootPart")
+		if hum and hrp then
+			hum:ChangeState(Enum.HumanoidStateType.Jumping)
+			hrp.AssemblyLinearVelocity = Vector3.new(
+				hrp.AssemblyLinearVelocity.X,
+				math.max(hrp.AssemblyLinearVelocity.Y, jumppower),
+				hrp.AssemblyLinearVelocity.Z
+			)
+		end
+	end)
 end
 
-SettingsTab:CreateSection("🎨 ESP — Present")
-SettingsTab:CreateToggle({Name="Present ESP", CurrentValue=false, Flag="PresentESP",
+cleanupHub = function()
+	getgenv().scriptRunning = false
+	ffarm = false
+	bfarm = false
+	dfarm = false
+	lfarm = false
+	watchedShopItems = {}
+	plants = {}
+	plantNames = {}
+	loweredPlantNames = {}
+	clearSpiderBodyMovers()
+	clearPlantESPVisuals()
+	disconnectRuntimeConnections()
+	setFlyJump(false)
+	pcall(function()
+		local hum = player.Character and player.Character:FindFirstChildWhichIsA("Humanoid")
+		if hum then
+			hum.WalkSpeed = 16
+			hum.JumpPower = 50
+			hum.MaxSlopeAngle = 89
+			hum.PlatformStand = false
+		end
+		Workspace.Gravity = 196.2
+		NOFLY()
+		if Noclipping then
+			Noclipping:Disconnect()
+			Noclipping = nil
+		end
+	end)
+	for _, entry in pairs(trackedPlantEntries) do
+		clearTrackedPlantESP(entry)
+	end
+	for _, entry in pairs(entityWatchList) do
+		local instance = findEntityInWorkspace(entry.workspaceName or entry.key)
+		if instance then
+			clearTrackedInstanceESP(instance, entry)
+		end
+	end
+	for _, entry in pairs(travelerWatchList) do
+		local instance = findEntityInWorkspace(entry.workspaceName or entry.key)
+		if instance then
+			clearTrackedInstanceESP(instance, entry)
+		end
+	end
+	for _, ev in pairs(ENTRANCES) do
+		clearEntranceESP(ev.key)
+	end
+	getgenv().FFHubUnload = nil
+	suppressWindowCloseNotice = true
+	pcall(function()
+		ActualWindow:Destroy()
+	end)
+end
+
+getgenv().FFHubUnload = cleanupHub
+
+SettingsTab:CreateSection("🔔 Notifications")
+SettingsTab:CreateToggle({Name="Present Notifications",    CurrentValue=notif.present,    Flag="NotifPresent",    Callback=function(v) notif.present=v end})
+SettingsTab:CreateToggle({Name="Frog Notifications",       CurrentValue=notif.frog,       Flag="NotifFrog",       Callback=function(v) notif.frog=v end})
+SettingsTab:CreateToggle({Name="Cosmic Ghost Notifications",CurrentValue=notif.cosmic,    Flag="NotifCosmic",    Callback=function(v) notif.cosmic=v end})
+SettingsTab:CreateToggle({Name="Path Gambler Notifications",CurrentValue=notif.gambler,   Flag="NotifGambler",   Callback=function(v) notif.gambler=v end})
+SettingsTab:CreateToggle({Name="Firefly Notifications",    CurrentValue=notif.firefly,    Flag="NotifFirefly",    Callback=function(v) notif.firefly=v end})
+SettingsTab:CreateToggle({Name="Bird Nest Notifications",  CurrentValue=notif.birdnest,   Flag="NotifBird",       Callback=function(v) notif.birdnest=v end})
+SettingsTab:CreateToggle({Name="Strangeman Notifications", CurrentValue=notif.strangeman, Flag="NotifStrangeman", Callback=function(v) notif.strangeman=v end})
+SettingsTab:CreateToggle({Name="Rabbit Hole Notifications",CurrentValue=notif.rabbithole, Flag="NotifRabbithole", Callback=function(v) notif.rabbithole=v end})
+SettingsTab:CreateToggle({Name="Pitfall Notifications",    CurrentValue=notif.pitfall,    Flag="NotifPitfall",    Callback=function(v) notif.pitfall=v end})
+
+SettingsTab:CreateSection("ESP")
+SettingsTab:CreateToggle({Name="Present ESP", CurrentValue=espToggles.present, Flag="PresentESP",
 	Callback=function(v)
 		espToggles.present = v
 		if not v and LatestPresent then
@@ -2302,47 +2782,19 @@ SettingsTab:CreateToggle({Name="Present ESP", CurrentValue=false, Flag="PresentE
 		end
 		Rayfield:Notify({Title="Present ESP", Content=v and "Enabled" or "Disabled", Duration=2})
 	end})
-
-SettingsTab:CreateSection("🎨 ESP — Plants")
-SettingsTab:CreateToggle({Name="Plant ESP", CurrentValue=false, Flag="PlantESP",
+SettingsTab:CreateToggle({Name="Plant ESP", CurrentValue=espToggles.plants, Flag="PlantESP",
 	Callback=function(v)
 		espToggles.plants = v
-		if not v then for _, i in pairs(spawnersFolder:GetDescendants()) do if i.Name=="PlantBoxHandleAdornment" or i.Name=="PlantBeam" then i:Destroy() end end end
+		if not v then
+			for _, entry in pairs(trackedPlantEntries) do
+				if not entry.special then
+					clearTrackedPlantESP(entry)
+				end
+			end
+		end
 		Rayfield:Notify({Title="Plant ESP", Content=v and "Enabled" or "Disabled", Duration=2})
 	end})
-SettingsTab:CreateInput({Name="Add Plant", PlaceholderText="Plant name...", RemoveTextAfterFocus=true,
-	Callback=function(value)
-		if not value or value=="" then return end
-		for _,v in pairs(ReplicatedStorage.ItemInfo:GetDescendants()) do
-			if v.Name=="FullName" and string.lower(v.Value)==string.lower(value) then
-				local id=tonumber(v.Parent.Name)
-				if not table.find(plants,id) then
-					table.insert(plants,id); table.insert(plantNames,v.Value); table.insert(loweredPlantNames,string.lower(v.Value))
-					Rayfield:Notify({Title="Plant ESP", Content="Added: "..v.Value, Duration=3})
-				else Rayfield:Notify({Title="Plant ESP", Content="Already tracking: "..v.Value, Duration=3}) end; return
-			end
-		end
-		Rayfield:Notify({Title="Plant ESP", Content="Not found: "..value, Duration=3})
-	end})
-SettingsTab:CreateInput({Name="Remove Plant", PlaceholderText="Plant name...", RemoveTextAfterFocus=true,
-	Callback=function(value)
-		if not value or value=="" then return end
-		for _,v in pairs(ReplicatedStorage.ItemInfo:GetDescendants()) do
-			if v.Name=="FullName" and string.lower(v.Value)==string.lower(value) then
-				local id=tonumber(v.Parent.Name); local idx=table.find(plants,id)
-				if idx then
-					table.remove(plants,idx)
-					local n=table.find(plantNames,v.Value); if n then table.remove(plantNames,n) end
-					local l=table.find(loweredPlantNames,string.lower(v.Value)); if l then table.remove(loweredPlantNames,l) end
-					for _,i in pairs(spawnersFolder:GetDescendants()) do if i.Name=="PlantBoxHandleAdornment" or i.Name=="PlantBeam" then i:Destroy() end end
-					Rayfield:Notify({Title="Plant ESP", Content="Removed: "..v.Value, Duration=3})
-				end; return
-			end
-		end
-	end})
-
-SettingsTab:CreateSection("🎨 ESP — Frog & Entrances")
-SettingsTab:CreateToggle({Name="Frog ESP", CurrentValue=true, Flag="FrogESP",
+SettingsTab:CreateToggle({Name="Frog ESP", CurrentValue=espToggles.frog, Flag="FrogESP",
 	Callback=function(v)
 		espToggles.frog = v
 		if not v then
@@ -2368,31 +2820,21 @@ for _, ev in pairs(ENTRANCES) do
 		end})
 end
 
-SettingsTab:CreateSection("🎨 UI Theme")
+SettingsTab:CreateSection("Theme")
+SettingsTab:CreateLabel("Window toggle key: RightShift")
 SettingsTab:CreateDropdown({Name="Theme", SearchEnabled=true,
-	Options={"Default","Ocean","AmberGlow","Light","Amethyst","Green","Bloom","DarkBlue","Serenity"},
-	CurrentOption={"Default"}, Flag="Theme",
+	Options=getThemeOptions(),
+	CurrentOption={WindUI:GetCurrentTheme() or "Crimson"}, Flag="Theme",
 	Callback=function(opt)
-		pcall(function() Rayfield:SetTheme(opt[1]) end)
-		pcall(function() Window:SetTheme(opt[1]) end)
+		local themeName = opt[1]
+		if themeName and themeName ~= "" then
+			pcall(function() WindUI:SetTheme(themeName) end)
+		end
 	end})
 
-SettingsTab:CreateSection("🚪 Exit")
+SettingsTab:CreateSection("Exit")
 SettingsTab:CreateButton({Name="Exit Hub", Callback=function()
-	getgenv().scriptRunning = false
-	ffarm=false; bfarm=false; dfarm=false; lfarm=false; espToggles.plants=false; watchedShopItems={}
-	plants={}; plantNames={}; loweredPlantNames={}
-	pcall(function()
-		local hum = player.Character:FindFirstChildWhichIsA("Humanoid")
-		if hum then hum.WalkSpeed=16; hum.JumpPower=50; hum.MaxSlopeAngle=89 end
-		Workspace.Gravity = 196.2; NOFLY()
-		if Noclipping then Noclipping:Disconnect() end
-	end)
-	for _, v in pairs(spawnersFolder:GetDescendants()) do
-		if v.Name=="PlantBoxHandleAdornment" or v.Name=="PlantBeam" then v:Destroy() end
-	end
-	for _, ev in pairs(ENTRANCES) do clearEntranceESP(ev.key) end
-	Rayfield:Destroy()
+	cleanupHub()
 end})
 
 -- =====================================================================
@@ -2400,7 +2842,8 @@ end})
 -- =====================================================================
 function sFLY()
 	repeat task.wait() until player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-	if flyKeyDown then flyKeyDown:Disconnect() end; if flyKeyUp then flyKeyUp:Disconnect() end
+	if flyKeyDown then flyKeyDown:Disconnect(); flyKeyDown = nil end
+	if flyKeyUp then flyKeyUp:Disconnect(); flyKeyUp = nil end
 	local T=player.Character.HumanoidRootPart; local C={F=0,B=0,L=0,R=0}; local S=0
 	local BG=Instance.new("BodyGyro"); local BV=Instance.new("BodyVelocity")
 	BG.P=9e4; BG.maxTorque=Vector3.new(9e9,9e9,9e9); BG.Parent=T
@@ -2424,7 +2867,8 @@ end
 
 function NOFLY()
 	FLYING=false
-	if flyKeyDown then flyKeyDown:Disconnect() end; if flyKeyUp then flyKeyUp:Disconnect() end
+	if flyKeyDown then flyKeyDown:Disconnect(); flyKeyDown = nil end
+	if flyKeyUp then flyKeyUp:Disconnect(); flyKeyUp = nil end
 	local hum=player.Character and player.Character:FindFirstChildOfClass("Humanoid"); if hum then hum.PlatformStand=false end
 end
 
@@ -2510,32 +2954,18 @@ task.spawn(function()
 	end
 end)
 
--- Plant ESP loop
 task.spawn(function()
 	while getgenv().scriptRunning do
-		task.wait(1)
-		if espToggles.plants and #plants > 0 then
-			for _,v in pairs(spawnersFolder:GetDescendants()) do
-				if v and v:IsA("IntValue") and v.Name=="Item" and v.Parent and v.Parent.Name=="Info" then
-					if table.find(plants, tonumber(v.Value)) then
-						local hitbox=v.Parent.Parent:FindFirstChild("HitBox")
-						if hitbox then
-							if not hitbox:FindFirstChild("PlantBoxHandleAdornment") then
-								local adorn=Instance.new("BoxHandleAdornment"); adorn.Name="PlantBoxHandleAdornment"
-								adorn.Adornee=hitbox; adorn.AlwaysOnTop=true; adorn.ZIndex=0
-								adorn.Size=hitbox.Size+Vector3.new(2,2,2); adorn.Transparency=0.3
-								adorn.Color3=Color3.fromRGB(0,255,128); adorn.Parent=hitbox
-							end
-							if not hitbox:FindFirstChild("PlantBeam") then
-								local beam=Instance.new("Beam"); beam.Name="PlantBeam"
-								beam.Color=ColorSequence.new(Color3.fromRGB(0,255,128)); beam.Width0=0.1; beam.Width1=0.1
-								local att0=Instance.new("Attachment", player.Character:WaitForChild("HumanoidRootPart"))
-								local att1=Instance.new("Attachment", hitbox)
-								beam.Attachment0=att0; beam.Attachment1=att1; beam.Parent=hitbox
-							end
-						end
-					end
-				end
+		task.wait(1.5)
+		processTrackedPlants()
+		for name, entry in pairs(entityWatchList) do
+			if entry.active then
+				refreshTrackedInstance(name, entry)
+			end
+		end
+		for name, entry in pairs(travelerWatchList) do
+			if entry.active then
+				refreshTrackedInstance(name, entry)
 			end
 		end
 	end
@@ -2556,17 +2986,15 @@ task.spawn(function()
 	onNightBeginEntrances()
 	updateFrogParagraph()
 	updatePresentParagraph()
-	-- Scan for already-existing watched entities
+	processTrackedPlants()
 	for name, entry in pairs(entityWatchList) do
 		if entry.active then
-			local found = Workspace:FindFirstChild(name, true)
-			if found then notifyEntity(found, entry.label, entry.entityType) end
+			refreshTrackedInstance(name, entry)
+		end
+	end
+	for name, entry in pairs(travelerWatchList) do
+		if entry.active then
+			refreshTrackedInstance(name, entry)
 		end
 	end
 end)
-
-ActualWindow:DisableTopbarButtons({
-   -- "Close", 
-    "Minimize", 
-   -- "Fullscreen",
-})

@@ -1,5 +1,5 @@
 -- ============================================================
---  FF Hub  |  Original by SeventhBuilder  |  v7
+--  FF Hub  |  Original by SeventhBuilder  |  v8
 -- ============================================================
 
 RunService        = game:GetService("RunService")
@@ -2477,14 +2477,15 @@ PlayerTab:CreateToggle({Name="Noclip", CurrentValue=false, Flag="Noclip", Callba
 	else if Noclipping then Noclipping:Disconnect(); Noclipping = nil end end
 end})
 
+PlayerTab:CreateToggle({Name="Fly Jump", CurrentValue=false, Flag="FlyJump", Callback=function(v)
+	setFlyJump(v)
+end})
+
 PlayerTab:CreateToggle({Name="Fly", CurrentValue=false, Flag="Fly", Callback=function(v)
 	if v then NOFLY(); task.wait(); sFLY() else NOFLY() end
 end})
 
 PlayerTab:CreateSection("🛠 Tools")
-PlayerTab:CreateToggle({Name="FlyJump", CurrentValue=false, Flag="FlyJump", Callback=function(v)
-	setFlyJump(v)
-end})
 
 PlayerTab:CreateButton({Name="Telekinesis  [Hold=Grab | Q/E=Dist | R=Rot | T=Pull | Y=Fling]", Callback=function()
 	function inject(obj, fn)

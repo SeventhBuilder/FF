@@ -973,7 +973,7 @@ local PLANT_TRACK_NAMES = {
 	"Yellow Balloon Mushroom","Bobber Mushroom","Grugbug Mushroom","Honey Mushroom","Lumoore Mushroom",
 	"Purple Balloon Mushroom","Sprutle Mushroom","Moon Mushroom","Snowball Mushroom","Icem Mushroom",
 	"Elephant Mushroom","Nightmare Mushroom","Mushtache Mushroom","Strangeman Mushroom",
-	"RisingStar Mushroom","Boomba Mushroom","Maroon Mushroom","Birds Nest","Dragonroot","Pendulum Plant Pendant",
+	"RisingStar Mushroom","Boomba Mushroom","Maroon Mushroom","Bird Nest","Dragonroot","Pendulum Plant Pendant",
 	"Emos Mushroom","Auspicious Charm","Little Forest","Pipe Machine","Plunger Colony","Plucky",
 	"Pebble Totem","Boulder Totem","Mountain Totem",
 }
@@ -1003,7 +1003,6 @@ local DISPLAY_NAME_OVERRIDES = {
 	NPC_Construct = "Construct",
 	NPC_Giver = "Interdimensional Traveler",
 	GratefulFrogs = "Grateful Frog",
-	BirdsNest = "Bird Nest",
 }
 
 local ENTITY_COLORS = {

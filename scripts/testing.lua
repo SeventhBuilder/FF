@@ -1,5 +1,5 @@
 -- ============================================================
---  FF Hub  |  Original by SeventhBuilder  |  v10
+--  FF Hub  |  Original by SeventhBuilder  |  v11
 -- ============================================================
 
 RunService        = game:GetService("RunService")
@@ -11,9 +11,17 @@ Lighting			= game:GetService("Lighting")
 ReplicatedStorage = game:GetService("ReplicatedStorage")
 StarterGui        = game:GetService("StarterGui")
 
-for _, i in pairs(CoreGui:GetDescendants()) do
-	if i.Name == "SimpleSpy2" then i:Destroy(); Players.LocalPlayer:Kick("Unstable connection detected") end
+for index, i in ipairs(CoreGui:GetDescendants()) do
+	if i.Name == "SimpleSpy2" then
+		i:Destroy()
+		Players.LocalPlayer:Kick("Unstable connection detected")
+		break
+	end
+	if index % 400 == 0 then
+		task.wait()
+	end
 end
+
 if getgenv().FFHubUnload then pcall(getgenv().FFHubUnload) end
 getgenv().scriptRunning = false; task.wait(0.1); getgenv().scriptRunning = true
 
@@ -25,6 +33,7 @@ Mouse  = player:GetMouse()
 -- =====================================================================
 local WindUI
 local Window
+local HUB_VERSION = "v11.4"
 
 local walkspeed = 18; local jumppower = 81.5; local gravity = Workspace.Gravity
 local sangle = 56; local flyspeed = 1; local iyflyspeed = 1
@@ -34,9 +43,10 @@ local amountEmptyInventory = 20
 local Clip = false; local Noclipping = nil
 local FLYING = false; local flyKeyDown, flyKeyUp
 
-local enabled = { present=false, strangeman=false, pitfall=false, rabbithole=false, cosmic=false, gambler=false }
-local notif   = { present=true, cosmic=true, gambler=true, firefly=true, birdnest=true, strangeman=true, rabbithole=true, pitfall=true }
+local enabled = { present=false, strangeman=false, pitfall=false, rabbithole=false }
+local notif   = { present=true, firefly=true, birdnest=true, strangeman=true, rabbithole=true, pitfall=true }
 local autoCollect = { present=false }
+local autoTeleportState = { present=false }
 local espToggles  = { plants=true, present=true, strangeman=true, rabbithole=true, pitfall=true, players=false }
 
 local spawnersFolder = Workspace.Spawners
@@ -54,6 +64,8 @@ local entranceOptionLookup = {}
 local trackedPlantEntries = {}
 local notifiedInstances = setmetatable({}, {__mode="k"})
 local autoCollectedInstances = setmetatable({}, {__mode="k"})
+local autoTeleportedInstances = setmetatable({}, {__mode="k"})
+local autoTeleportedPresents = setmetatable({}, {__mode="k"})
 local spiderBodyMovers = {}
 local fastKillsEnabled = false
 local fastKillInitialized = false
@@ -62,6 +74,10 @@ local flyJumpEnabled = false
 local flyJumpConnection = nil
 local suppressWindowCloseNotice = false
 local runtimeConnections = {}
+local pendingActionDialogs = {}
+local plantRefreshQueued = false
+local currentToggleKey = Enum.KeyCode.RightShift
+local currentToggleKeyName = "RightShift"
 local trackerDropdowns = {}
 local trackerSelections = {
 	plants = {},
@@ -125,7 +141,17 @@ function showActionDialog(opts)
 						Title = actionTitle,
 						Callback = function()
 							if opts.Callback then
-								task.spawn(opts.Callback)
+								task.spawn(function()
+									local ok, err = pcall(opts.Callback)
+									if not ok then
+										warn("[FF Hub] action dialog callback failed:", err)
+										notify({
+											Title = title,
+											Content = "Action failed: " .. tostring(err),
+											Duration = 4,
+										})
+									end
+								end)
 							end
 						end,
 					},
@@ -136,16 +162,43 @@ function showActionDialog(opts)
 				},
 			})
 		end)
-		if ok and dialog and dialog.Show then
-			dialog:Show()
-			return
+		if ok and dialog then
+			if dialog.Show then
+				local showOk = pcall(function()
+					dialog:Show()
+				end)
+				if showOk then
+					return
+				end
+			else
+				return
+			end
 		end
+	elseif not Window then
+		table.insert(pendingActionDialogs, opts)
+		return
 	end
 	notify({
 		Title = title,
 		Content = content,
 		Duration = opts.Duration or 4,
 	})
+end
+
+function formatToggleKeyName(keyCode)
+	local keyName = tostring(keyCode or currentToggleKey)
+	keyName = keyName:gsub("^Enum%.KeyCode%.", "")
+	return keyName
+end
+
+function getEntityOptionData(selectionKey, label)
+	local lookupTable = ({
+		animals = animalOptionLookup,
+		monsters = monsterOptionLookup,
+		travelers = travelerOptionLookup,
+		collectibles = collectibleOptionLookup,
+	})[selectionKey]
+	return lookupTable and lookupTable[label] or nil
 end
 
 function fetchRemoteSource(urls)
@@ -315,26 +368,87 @@ function addHighlightESP(adornee, fillColor, outlineColor, tag)
 end
 
 function addBillboardESP(part, text, color, tag)
-	if not part or part:FindFirstChild(tag.."_BB") then return end
-	local anchor = Instance.new("Part")
-	anchor.Name = tag.."_BB"; anchor.Size = Vector3.new(0.1,0.1,0.1)
-	anchor.Anchored = true; anchor.CanCollide = false; anchor.Transparency = 1
-	anchor.CFrame = part.CFrame + Vector3.new(0,3,0); anchor.Parent = part
-	local bg = Instance.new("BillboardGui", anchor)
-	bg.AlwaysOnTop = true; bg.Size = UDim2.new(0,200,0,50); bg.StudsOffset = Vector3.new(0,2,0)
-	local lbl = Instance.new("TextLabel", bg)
-	lbl.BackgroundTransparency = 1; lbl.Size = UDim2.new(1,0,1,0)
-	lbl.Font = Enum.Font.GothamBold; lbl.TextSize = 16; lbl.Text = text
+	if not part then return end
+	local bg = part:FindFirstChild(tag.."_BB")
+	if not bg then
+		bg = Instance.new("BillboardGui")
+		bg.Name = tag.."_BB"
+		bg.AlwaysOnTop = true
+		bg.StudsOffset = Vector3.new(0, 3.5, 0)
+		bg.Adornee = part
+		bg.Parent = part
+	end
+	bg.Size = UDim2.new(0, 220, 0, string.find(tostring(text or ""), "\n", 1, true) and 68 or 52)
+
+	local lbl = bg:FindFirstChild("Label") or bg:FindFirstChildWhichIsA("TextLabel")
+	if not lbl then
+		lbl = Instance.new("TextLabel")
+		lbl.Name = "Label"
+		lbl.BackgroundTransparency = 1
+		lbl.Size = UDim2.new(1,0,1,0)
+		lbl.Font = Enum.Font.GothamBold
+		lbl.TextSize = 16
+		lbl.TextStrokeTransparency = 0.3
+		lbl.TextStrokeColor3 = Color3.new(0,0,0)
+		lbl.Parent = bg
+	end
+	lbl.Text = text
 	lbl.TextColor3 = color or Color3.fromRGB(255,255,255)
-	lbl.TextStrokeTransparency = 0.3; lbl.TextStrokeColor3 = Color3.new(0,0,0)
+end
+
+function addTracerESP(part, color, tag)
+	if not part or part:FindFirstChild(tag.."_Beam") then return end
+	local character = player.Character
+	local hrp = character and character:FindFirstChild("HumanoidRootPart")
+	if not hrp then return end
+	local sourceAttachment = hrp:FindFirstChild(tag.."_A0")
+	if not sourceAttachment then
+		sourceAttachment = Instance.new("Attachment")
+		sourceAttachment.Name = tag.."_A0"
+		sourceAttachment.Parent = hrp
+	end
+	local targetAttachment = Instance.new("Attachment")
+	targetAttachment.Name = tag.."_A1"
+	targetAttachment.Parent = part
+	local beam = Instance.new("Beam")
+	beam.Name = tag.."_Beam"
+	beam.Attachment0 = sourceAttachment
+	beam.Attachment1 = targetAttachment
+	beam.FaceCamera = true
+	beam.LightEmission = 1
+	beam.Brightness = 2
+	beam.Width0 = 0.09
+	beam.Width1 = 0.09
+	beam.Transparency = NumberSequence.new(0.15)
+	beam.Color = ColorSequence.new(color or Color3.fromRGB(255,255,255))
+	beam.Parent = part
 end
 
 function removeESP(instance, tag)
-	if not instance then return end
-	local hl = instance:FindFirstChild(tag.."_HL"); if hl then hl:Destroy() end
-	for _, child in pairs(instance:GetDescendants()) do
-		if child.Name == tag.."_BB" then child:Destroy() end
+	if instance then
+		local hl = instance:FindFirstChild(tag.."_HL")
+		if hl then hl:Destroy() end
+		for _, child in pairs(instance:GetDescendants()) do
+			if child.Name == tag.."_BB"
+				or child.Name == tag.."_Beam"
+				or child.Name == tag.."_A1" then
+				child:Destroy()
+			end
+		end
 	end
+end
+
+function queuePlantRefresh(delaySeconds)
+	if plantRefreshQueued then
+		return
+	end
+	plantRefreshQueued = true
+	task.delay(delaySeconds or 0.15, function()
+		plantRefreshQueued = false
+		if getgenv().scriptRunning and type(processTrackedPlants) == "function" and next(trackedPlantEntries) ~= nil then
+			processTrackedPlants()
+		end
+	end)
 end
 
 function applyEntranceESP(entrance, tag, color, label)
@@ -461,7 +575,7 @@ local TRAVELERS_DAY = {
 function findNPCInWorkspace(npcName)
 	local npcs = Workspace:FindFirstChild("NPCS")
 	if npcs then
-		local found = npcs:FindFirstChild(npcName)
+		local found = npcs:FindFirstChild(npcName) or npcs:FindFirstChild(npcName, true)
 		if found then return found end
 	end
 	return Workspace:FindFirstChild(npcName)
@@ -476,14 +590,22 @@ function notifyAndTeleportNPC(npcName, label)
 		else clearTrackedInstanceESP(npc, entry) end
 		if not entry.notify or notifiedInstances[npc] then return end
 		notifiedInstances[npc] = true
-		local part = npc:IsA("BasePart") and npc or npc:FindFirstChildWhichIsA("BasePart", true)
+		local part = getTrackedInstancePart(npc)
+		local fallbackPosition = part and part.Position or nil
 		showActionDialog({
 			Title = "🧭 " .. label .. " Available!",
-			Content = "Traveler spotted. Click teleport to move there.",
+			Content = part and "Found in workspace and loaded on your client."
+				or "Found in workspace, but it is not fully loaded on your client yet.",
 			ActionTitle = "Teleport",
 			Callback = function()
-				if part then
-					teleportTo(part.Position + Vector3.new(0, 5, 0))
+				local refreshedNpc = findNPCInWorkspace(npcName)
+				local refreshedPart = getTrackedInstancePart(refreshedNpc)
+				if refreshedPart then
+					teleportTo(refreshedPart.Position + Vector3.new(0, 5, 0))
+				elseif fallbackPosition then
+					teleportTo(fallbackPosition + Vector3.new(0, 5, 0))
+				else
+					notify({Title=label, Content="Still not fully loaded on your client.", Duration=3})
 				end
 			end,
 		})
@@ -500,26 +622,40 @@ end
 -- ENTITY WATCHER  (animals, nightmare collectibles, world monsters)
 -- =====================================================================
 -- Single notification helper for generic entities
-function notifyEntity(instance, label, entityType)
-	local part = instance:IsA("BasePart") and instance or instance:FindFirstChildWhichIsA("BasePart", true)
+function notifyEntity(instance, label, entityType, workspaceName)
+	local part = getTrackedInstancePart(instance)
+	local fallbackPosition = part and part.Position or nil
 	showActionDialog({
 		Title = "[" .. entityType .. "] " .. label .. " spotted!",
-		Content = "Use teleport to move to the tracked target.",
+		Content = part and "Found in workspace and loaded on your client."
+			or "Found in workspace, but it is not fully loaded on your client yet.",
 		ActionTitle = "Teleport",
 		Callback = function()
-			if part and part.Parent then
-				teleportTo(part.Position + Vector3.new(0, 5, 0))
+			local refreshed = findEntityInWorkspace(workspaceName or instance.Name)
+			local refreshedPart = getTrackedInstancePart(refreshed)
+			if refreshedPart and refreshedPart.Parent then
+				teleportTo(refreshedPart.Position + Vector3.new(0, 5, 0))
+			elseif fallbackPosition then
+				teleportTo(fallbackPosition + Vector3.new(0, 5, 0))
+			else
+				notify({Title=label, Content="Still not fully loaded on your client.", Duration=3})
 			end
 		end,
 	})
 end
 
 function onInstanceAdded(instance)
-	local entry = entityWatchList[instance.Name]
-	if entry and entry.active then
-		if entry.esp then applyTrackedInstanceESP(instance, entry)
-		else clearTrackedInstanceESP(instance, entry) end
-		task.spawn(notifyTrackedInstance, instance, entry)
+	for _, entry in pairs(entityWatchList) do
+		if entry.active then
+			for _, workspaceName in ipairs(getTrackedWorkspaceNames(entry)) do
+				if workspaceName == instance.Name then
+					if entry.esp then applyTrackedInstanceESP(instance, entry)
+					else clearTrackedInstanceESP(instance, entry) end
+					task.spawn(notifyTrackedInstance, instance, entry)
+					break
+				end
+			end
+		end
 	end
 	local tEntry = travelerWatchList[instance.Name]
 	if tEntry and tEntry.active then
@@ -542,9 +678,11 @@ end
 connectEntityWatchers()
 connectSignal(spawnersFolder.DescendantAdded, function()
 	plantScanDirty = true
+	queuePlantRefresh(0.2)
 end)
 connectSignal(spawnersFolder.DescendantRemoving, function()
 	plantScanDirty = true
+	queuePlantRefresh(0.2)
 end)
 
 -- =====================================================================
@@ -600,18 +738,18 @@ end
 function iterateTrackedPlantInstances(entry, callback)
 	if not entry then return end
 	if entry.special == "frog" then
-		spawner = spawnersFolder:FindFirstChild("The Sprutle Frog Expansion_Updated")
-		frogSpawner = spawner and spawner:FindFirstChild("Spawner_GratefulFrogs")
-		collectible = frogSpawner and frogSpawner:FindFirstChild("Collectible")
-		part = collectible and collectible:FindFirstChildWhichIsA("BasePart")
+		local spawner = spawnersFolder:FindFirstChild("The Sprutle Frog Expansion_Updated")
+		local frogSpawner = spawner and spawner:FindFirstChild("Spawner_GratefulFrogs")
+		local collectible = frogSpawner and frogSpawner:FindFirstChild("Collectible")
+		local part = collectible and collectible:FindFirstChildWhichIsA("BasePart")
 		if collectible then
 			callback(collectible, part)
 		end
 		return
 	end
 
-	scannedPlants = scanTrackedPlantInstances()
-	bucket = scannedPlants[entry.key]
+	local scannedPlants = scanTrackedPlantInstances()
+	local bucket = scannedPlants[entry.key]
 	if not bucket then return end
 	for model, part in pairs(bucket) do
 		if model and model.Parent and part and part.Parent then
@@ -623,13 +761,20 @@ end
 function notifyTrackedPlant(entry, model, part)
 	if not entry or not entry.notify or not model or notifiedInstances[model] then return end
 	notifiedInstances[model] = true
+	local fallbackPosition = part and part.Position or nil
 	showActionDialog({
 		Title = "[Plant] " .. entry.label .. " found!",
-		Content = "Use teleport to move to this plant.",
+		Content = part and "Found in workspace and loaded on your client."
+			or "Found in workspace, but it is not fully loaded on your client yet.",
 		ActionTitle = "Teleport",
 		Callback = function()
-			if part and part.Parent then
-				teleportTo(part.Position + Vector3.new(0, 5, 0))
+			local _, refreshedPart = findFirstTrackedPlantTarget(entry)
+			if refreshedPart and refreshedPart.Parent then
+				teleportTo(refreshedPart.Position + Vector3.new(0, 5, 0))
+			elseif fallbackPosition then
+				teleportTo(fallbackPosition + Vector3.new(0, 5, 0))
+			else
+				notify({Title=entry.label, Content="Still not fully loaded on your client.", Duration=3})
 			end
 		end,
 	})
@@ -653,6 +798,19 @@ function autoCollectTrackedPlant(entry, model, part)
 	end)
 end
 
+function autoTeleportTrackedTarget(entry, instance, part)
+	if not entry or not entry.autoTeleport or not instance or autoTeleportedInstances[instance] then
+		return
+	end
+	if not part or not part.Parent then
+		return
+	end
+	autoTeleportedInstances[instance] = true
+	task.spawn(function()
+		teleportTo(part.Position + Vector3.new(0, 5, 0))
+	end)
+end
+
 function processTrackedPlants()
 	for _, entry in pairs(trackedPlantEntries) do
 		if entry.active then
@@ -664,11 +822,13 @@ function processTrackedPlants()
 					addHighlightESP(model, ENTITY_COLORS.Plant, Color3.new(1, 1, 1), tag)
 					if part then
 						addBillboardESP(part, entry.label, ENTITY_COLORS.Plant, tag)
+						addTracerESP(part, ENTITY_COLORS.Plant, tag)
 					end
 				else
 					removeESP(model, tag)
 				end
 				notifyTrackedPlant(entry, model, part)
+				autoTeleportTrackedTarget(entry, model, part)
 				autoCollectTrackedPlant(entry, model, part)
 			end)
 			updateTrackedPlantStatus(entry, count)
@@ -810,6 +970,10 @@ local PLANT_TRACK_NAMES = {
 -- DISPLAY HELPERS / CATALOGS
 -- =====================================================================
 local DISPLAY_NAME_OVERRIDES = {
+	FloatingHeadNPC = "Ghost",
+	GreenFloatingHeadNPC = "Green Ghost",
+	DarkFloatingHeadNPC = "Dark Ghost",
+	RedFloatingMonsterHeadNPC = "Plasma Ghost",
 	CosmicFloatingMonsterHeadNPC = "Cosmic Ghost",
 	PathGamblerNPC = "Path Gambler",
 	BanditSpiderNPC = "Spider Boss",
@@ -830,9 +994,9 @@ local DISPLAY_NAME_OVERRIDES = {
 	BirdsNest = "Bird Nest",
 	TheObjectFromEarth = "The Object From Earth",
 	AngryBushdwellers = "Angry Bushdwellers",
-	SmallTitan = "Small Titan",
-	MedTitan = "Medium Titan",
-	LargeTitan = "Large Titan",
+	SmallTitan = "Pebble Totem",
+	MedTitan = "Boulder Totem",
+	LargeTitan = "Mountain Totem",
 }
 
 local ENTITY_COLORS = {
@@ -963,15 +1127,56 @@ function buildPlantOptions()
 	return labels
 end
 
+function getGroupedEntityInfo(rawName, entityType)
+	if entityType ~= "Monster" then
+		return nil, nil
+	end
+	local rawBase = tostring(rawName or ""):match("^(.-)%d+NPC$")
+	if not rawBase or rawBase == "" then
+		return nil, nil
+	end
+	local displayName = toDisplayName(rawBase .. "NPC")
+	if displayName == "" then
+		return nil, nil
+	end
+	return "group:" .. normalizePlantKey(displayName), displayName
+end
+
 function buildEntityOptions(rawEntries, entityType)
 	local entries = {}
+	local groupedEntries = {}
 	for _, raw in ipairs(rawEntries) do
-		table.insert(entries, {
-			key = raw,
-			workspaceName = raw,
-			displayName = toDisplayName(raw),
-			entityType = entityType,
-		})
+		local groupKey, groupName = getGroupedEntityInfo(raw, entityType)
+		if groupKey then
+			local entry = groupedEntries[groupKey]
+			if not entry then
+				entry = {
+					key = groupKey,
+					workspaceName = raw,
+					workspaceNames = {},
+					displayName = groupName,
+					entityType = entityType,
+				}
+				groupedEntries[groupKey] = entry
+				table.insert(entries, entry)
+			end
+			table.insert(entry.workspaceNames, raw)
+		else
+			table.insert(entries, {
+				key = raw,
+				workspaceName = raw,
+				workspaceNames = {raw},
+				displayName = toDisplayName(raw),
+				entityType = entityType,
+			})
+		end
+	end
+	for _, entry in ipairs(entries) do
+		if not entry.workspaceNames or #entry.workspaceNames == 0 then
+			entry.workspaceNames = {entry.workspaceName}
+		end
+		table.sort(entry.workspaceNames)
+		entry.workspaceName = entry.workspaceNames[1]
 	end
 	sortEntriesByDisplayName(entries)
 	return buildOptionLookup(entries)
@@ -1018,6 +1223,48 @@ function buildEntranceOptions()
 	return labels
 end
 
+function getPlantDropdownOptions()
+	if not plantDropdownOptions then
+		plantDropdownOptions = buildPlantOptions()
+	end
+	return plantDropdownOptions
+end
+
+function getAnimalDropdownOptions()
+	if not animalDropdownOptions then
+		animalDropdownOptions, animalOptionLookup = buildEntityOptions(ANIMAL_NAMES, "Animal")
+	end
+	return animalDropdownOptions
+end
+
+function getMonsterDropdownOptions()
+	if not monsterDropdownOptions then
+		monsterDropdownOptions, monsterOptionLookup = buildEntityOptions(MONSTER_NPC_NAMES, "Monster")
+	end
+	return monsterDropdownOptions
+end
+
+function getCollectibleDropdownOptions()
+	if not collectibleDropdownOptions then
+		collectibleDropdownOptions, collectibleOptionLookup = buildEntityOptions(NIGHTMARE_COLLECTIBLE_NAMES, "Collectible")
+	end
+	return collectibleDropdownOptions
+end
+
+function getTravelerDropdownOptions()
+	if not travelerDropdownOptions then
+		travelerDropdownOptions = buildTravelerOptions()
+	end
+	return travelerDropdownOptions
+end
+
+function getEntranceDropdownOptions()
+	if not entranceDropdownOptions then
+		entranceDropdownOptions = buildEntranceOptions()
+	end
+	return entranceDropdownOptions
+end
+
 function buildShopItemOptions()
 	local labels, lookup = buildOptionLookup(buildItemInfoEntries())
 	shopItemOptionLookup = lookup
@@ -1030,8 +1277,19 @@ function clearPlantESPVisuals()
 			or obj.Name == "PlantBeam"
 			or obj.Name == "PlantBeamAttachment0"
 			or obj.Name == "PlantBeamAttachment1"
-			or string.find(obj.Name, "^TrackedPlant_") then
+			or string.find(obj.Name, "^TrackedPlant_")
+			or string.find(obj.Name, "_Beam$")
+			or string.find(obj.Name, "_A1$")
+			or string.find(obj.Name, "_BB$") then
 			obj:Destroy()
+		end
+	end
+	local character = player.Character
+	if character then
+		for _, obj in ipairs(character:GetDescendants()) do
+			if string.find(obj.Name, "_A0$") or string.find(obj.Name, "_Beam$") then
+				obj:Destroy()
+			end
 		end
 	end
 end
@@ -1069,26 +1327,40 @@ function resolveTrackedPlantTarget(instance)
 	return model or instance, part
 end
 
-function findTrackedPlantEntryForInstance(instance, activeEntries)
+function getTrackedPlantEntryByName(nameKey, exactLookup, activeEntries)
+	local exactEntry = exactLookup[nameKey]
+	if exactEntry then
+		return exactEntry
+	end
+	for _, entry in pairs(activeEntries) do
+		if plantNameMatches(nameKey, entry.matchKey or normalizePlantKey(entry.workspaceName)) then
+			return entry
+		end
+	end
+	return nil
+end
+
+function findTrackedPlantMatch(instance, exactLookup, activeEntries)
 	local current = instance
 	while current and current ~= spawnersFolder.Parent do
-		for _, entry in pairs(activeEntries) do
-			if plantNameMatches(current.Name, entry.matchKey or normalizePlantKey(entry.workspaceName)) then
-				return entry
-			end
+		local entry = getTrackedPlantEntryByName(normalizePlantKey(current.Name), exactLookup, activeEntries)
+		if entry then
+			return entry, current
 		end
 		current = current.Parent
 	end
-	return nil
+	return nil, nil
 end
 
 function scanTrackedPlantInstances()
 	local foundByKey = {}
 	local activeEntries = {}
+	local exactLookup = {}
 	for key, entry in pairs(trackedPlantEntries) do
 		if entry.active and entry.workspaceName and not entry.special then
 			activeEntries[key] = entry
 			foundByKey[key] = {}
+			exactLookup[entry.matchKey or normalizePlantKey(entry.workspaceName)] = entry
 		end
 	end
 	if next(activeEntries) == nil then
@@ -1099,28 +1371,15 @@ function scanTrackedPlantInstances()
 		return plantScanCache
 	end
 
-	for index, descendant in ipairs(spawnersFolder:GetDescendants()) do
-		local candidateRoot = nil
-		if descendant:IsA("IntValue") and descendant.Name == "Item" and descendant.Parent and descendant.Parent.Name == "Info" then
-			candidateRoot = descendant.Parent.Parent
-		elseif descendant:IsA("Model") or descendant:IsA("Folder") then
-			if descendant:FindFirstChild("Info")
-				or descendant:FindFirstChild("InteractEvent", true)
-				or descendant:FindFirstChild("CollectEvent", true)
-				or descendant:FindFirstChild("HitBox") then
-				candidateRoot = descendant
-			end
-		elseif descendant:IsA("BasePart") then
-			local directEntry = findTrackedPlantEntryForInstance(descendant, activeEntries)
-			if directEntry then
-				candidateRoot = descendant
-			end
-		end
+	if not spawnersFolder or not spawnersFolder.Parent then
+		return foundByKey
+	end
 
-		if candidateRoot then
-			local entry = findTrackedPlantEntryForInstance(candidateRoot, activeEntries)
+	for index, descendant in ipairs(spawnersFolder:GetDescendants()) do
+		if descendant:IsA("Model") or descendant:IsA("Folder") or descendant:IsA("BasePart") then
+			local entry, matchedInstance = findTrackedPlantMatch(descendant, exactLookup, activeEntries)
 			if entry then
-				local model, part = resolveTrackedPlantTarget(candidateRoot)
+				local model, part = resolveTrackedPlantTarget(matchedInstance or descendant)
 				if model and part then
 					local bucket = foundByKey[entry.key]
 					if bucket and not bucket[model] then
@@ -1129,7 +1388,7 @@ function scanTrackedPlantInstances()
 				end
 			end
 		end
-		if index % 250 == 0 then
+		if index % 400 == 0 then
 			task.wait()
 		end
 	end
@@ -1141,17 +1400,112 @@ end
 
 function getTrackedInstancePart(instance)
 	if not instance then return nil end
-	return instance:IsA("BasePart") and instance or instance:FindFirstChildWhichIsA("BasePart", true)
+	if instance:IsA("BasePart") then
+		return instance
+	end
+	if instance:IsA("Model") and instance.PrimaryPart then
+		return instance.PrimaryPart
+	end
+	return instance:FindFirstChild("HumanoidRootPart", true)
+		or instance:FindFirstChild("HitBox", true)
+		or instance:FindFirstChildWhichIsA("BasePart", true)
+end
+
+function getTrackedWorkspaceNames(source)
+	if type(source) == "table" then
+		if type(source.workspaceNames) == "table" and #source.workspaceNames > 0 then
+			return source.workspaceNames
+		end
+		if source.workspaceName then
+			return {source.workspaceName}
+		end
+		if source.key then
+			return {source.key}
+		end
+	elseif type(source) == "string" and source ~= "" then
+		return {source}
+	end
+	return {}
+end
+
+function findBestTrackedInstance(source)
+	local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+	local bestInstance, bestPart, bestDistance = nil, nil, math.huge
+	for _, workspaceName in ipairs(getTrackedWorkspaceNames(source)) do
+		local instance = findEntityInWorkspace(workspaceName)
+		local part = getTrackedInstancePart(instance)
+		if part and part.Parent then
+			local distance = hrp and (part.Position - hrp.Position).Magnitude or 0
+			if not bestPart or distance < bestDistance then
+				bestInstance = instance
+				bestPart = part
+				bestDistance = distance
+			end
+		elseif not bestInstance and instance then
+			bestInstance = instance
+		end
+	end
+	return bestInstance, bestPart
 end
 
 function getEntityESPTag(instanceName, entityType)
 	return sanitizeTag("Tracked_" .. tostring(entityType or "Entity") .. "_" .. tostring(instanceName or "Unknown"))
 end
 
+function resolveEntityCandidate(candidate)
+	if not candidate then return nil end
+	if candidate:IsA("Model") or candidate:IsA("Folder") or candidate:IsA("BasePart") then
+		return candidate
+	end
+	return candidate:FindFirstAncestorOfClass("Model")
+		or candidate:FindFirstAncestorOfClass("Folder")
+		or candidate:FindFirstAncestorWhichIsA("BasePart")
+end
+
 function findEntityInWorkspace(instanceName)
 	local npc = findNPCInWorkspace(instanceName)
 	if npc then return npc end
-	return Workspace:FindFirstChild(instanceName, true)
+
+	local targetKey = normalizePlantKey(instanceName)
+
+	local function findUnderRoot(root)
+		if not root then
+			return nil
+		end
+
+		local exact = root:FindFirstChild(instanceName, true)
+		local resolved = resolveEntityCandidate(exact)
+		if resolved then
+			return resolved
+		end
+
+		local fuzzyCandidate = nil
+		for index, descendant in ipairs(root:GetDescendants()) do
+			if descendant:IsA("Model") or descendant:IsA("Folder") or descendant:IsA("BasePart") then
+				local current = descendant
+				while current and current ~= root.Parent do
+					local currentKey = normalizePlantKey(current.Name)
+					if currentKey == targetKey then
+						return resolveEntityCandidate(descendant) or resolveEntityCandidate(current) or descendant
+					end
+					if not fuzzyCandidate and plantNameMatches(currentKey, targetKey) then
+						fuzzyCandidate = resolveEntityCandidate(descendant) or resolveEntityCandidate(current) or descendant
+					end
+					current = current.Parent
+				end
+			end
+			if index % 400 == 0 then
+				task.wait()
+			end
+		end
+		return fuzzyCandidate
+	end
+
+	local spawnerMatch = findUnderRoot(spawnersFolder)
+	if spawnerMatch then
+		return spawnerMatch
+	end
+	return findUnderRoot(Workspace)
 end
 
 function applyTrackedInstanceESP(instance, entry)
@@ -1162,6 +1516,9 @@ function applyTrackedInstanceESP(instance, entry)
 	local part = getTrackedInstancePart(instance)
 	if part then
 		addBillboardESP(part, entry.label, color, tag)
+		if entry.entityType == "Collectible" then
+			addTracerESP(part, color, tag)
+		end
 	end
 end
 
@@ -1173,16 +1530,22 @@ end
 function notifyTrackedInstance(instance, entry)
 	if not instance or not entry or not entry.notify or notifiedInstances[instance] then return end
 	notifiedInstances[instance] = true
-	notifyEntity(instance, entry.label, entry.entityType)
+	notifyEntity(instance, entry.label, entry.entityType, instance.Name)
 end
 
 function refreshTrackedInstance(instanceName, entry)
-	local instance = findEntityInWorkspace(instanceName)
-	if not instance then return nil end
-	if entry.esp then applyTrackedInstanceESP(instance, entry)
-	else clearTrackedInstanceESP(instance, entry) end
-	notifyTrackedInstance(instance, entry)
-	return instance
+	local foundInstance = nil
+	for _, workspaceName in ipairs(getTrackedWorkspaceNames(entry or instanceName)) do
+		local instance = findEntityInWorkspace(workspaceName)
+		if instance then
+			foundInstance = foundInstance or instance
+			if entry.esp then applyTrackedInstanceESP(instance, entry)
+			else clearTrackedInstanceESP(instance, entry) end
+			notifyTrackedInstance(instance, entry)
+			autoTeleportTrackedTarget(entry, instance, getTrackedInstancePart(instance))
+		end
+	end
+	return foundInstance
 end
 
 function getPlayerESPTag(targetPlayer)
@@ -1190,6 +1553,9 @@ function getPlayerESPTag(targetPlayer)
 end
 
 function refreshPlayersESP()
+	if not espToggles.players then
+		return
+	end
 	for _, otherPlayer in ipairs(Players:GetPlayers()) do
 		if otherPlayer ~= player then
 			local character = otherPlayer.Character
@@ -1197,9 +1563,14 @@ function refreshPlayersESP()
 			if character and character.Parent then
 				if espToggles.players then
 					local part = character:FindFirstChild("HumanoidRootPart") or character:FindFirstChildWhichIsA("BasePart", true)
+					local hum = character:FindFirstChildWhichIsA("Humanoid")
+					local hpText = ""
+					if hum then
+						hpText = ("\nHP: %d/%d"):format(math.max(0, math.floor(hum.Health)), math.max(1, math.floor(hum.MaxHealth)))
+					end
 					addHighlightESP(character, Color3.fromRGB(90, 170, 255), Color3.new(1, 1, 1), tag)
 					if part then
-						addBillboardESP(part, otherPlayer.Name, Color3.fromRGB(90, 170, 255), tag)
+						addBillboardESP(part, otherPlayer.Name .. hpText, Color3.fromRGB(90, 170, 255), tag)
 					end
 				else
 					removeESP(character, tag)
@@ -1218,8 +1589,7 @@ function clearPlayersESP()
 end
 
 function teleportToTrackedInstance(instanceName, label)
-	local instance = findEntityInWorkspace(instanceName)
-	local part = getTrackedInstancePart(instance)
+	local _, part = findBestTrackedInstance(instanceName)
 	if part then
 		teleportTo(part.Position + Vector3.new(0, 5, 0))
 	else
@@ -1234,7 +1604,7 @@ function bringTrackedInstanceToPlayer(instanceName, label)
 		return
 	end
 
-	local instance = findEntityInWorkspace(instanceName)
+	local instance = findBestTrackedInstance(instanceName)
 	if not instance then
 		notify({Title=label or "Bring Target", Content="Target is not available right now.", Duration=3})
 		return
@@ -1251,24 +1621,40 @@ function bringTrackedInstanceToPlayer(instanceName, label)
 	if model then
 		local originalPivot = model:GetPivot()
 		local targetPivot = CFrame.new(targetPosition) * (originalPivot - originalPivot.Position)
+		local baseParts = {}
 		for _, descendant in ipairs(model:GetDescendants()) do
 			if descendant:IsA("BasePart") then
 				descendant.CanCollide = false
 				descendant.AssemblyLinearVelocity = Vector3.zero
 				descendant.AssemblyAngularVelocity = Vector3.zero
+				table.insert(baseParts, descendant)
 			end
 		end
-		for _ = 1, 5 do
+		for _ = 1, 8 do
 			pcall(function()
 				model:PivotTo(targetPivot)
 			end)
 			task.wait()
 		end
+		local finalPart = getTrackedInstancePart(model)
+		if finalPart and (finalPart.Position - targetPosition).Magnitude > 20 then
+			for _, basePart in ipairs(baseParts) do
+				local offset = originalPivot:ToObjectSpace(basePart.CFrame)
+				basePart.CFrame = targetPivot * offset
+			end
+		end
 	else
 		part.CFrame = CFrame.new(targetPosition)
 	end
 
-	notify({Title=label or "Bring Target", Content="Moved near your character.", Duration=3})
+	local finalPart = getTrackedInstancePart(model or instance)
+	local distance = finalPart and (finalPart.Position - targetPosition).Magnitude or math.huge
+	notify({
+		Title = label or "Bring Target",
+		Content = distance <= 30 and "Moved near your character."
+			or "Move was attempted, but the server kept it away.",
+		Duration = 4,
+	})
 end
 
 function removeFogEffects()
@@ -1648,8 +2034,12 @@ function createContainerWrapper(container)
 	return wrapper
 end
 
-function yieldUIBuild()
-	task.wait()
+local uiYieldCounter = 0
+function yieldUIBuild(force)
+	uiYieldCounter += 1
+	if force or uiYieldCounter % 4 == 0 then
+		task.wait()
+	end
 end
 
 function createTrackerDropdownAsync(dropdownKey, targetWrapper, delay, builder)
@@ -1660,8 +2050,17 @@ function createTrackerDropdownAsync(dropdownKey, targetWrapper, delay, builder)
 			task.wait()
 		end
 		if not getgenv().scriptRunning then return end
-		local dropdown = builder(targetWrapper)
-		trackerDropdowns[dropdownKey] = dropdown
+		local ok, dropdownOrError = pcall(builder, targetWrapper)
+		if not ok then
+			warn("[FF Hub] failed to create tracker dropdown:", dropdownKey, dropdownOrError)
+			notify({
+				Title = "UI",
+				Content = "Failed to build " .. tostring(dropdownKey) .. " dropdown.",
+				Duration = 4,
+			})
+			return
+		end
+		trackerDropdowns[dropdownKey] = dropdownOrError
 		if #getSelectionValues(trackerSelections[dropdownKey]) > 0 then
 			setDropdownSelection(dropdownKey)
 		end
@@ -1793,27 +2192,41 @@ function markPresent(part)
 	addHighlightESP(part.Parent or part, Color3.fromRGB(255,50,50), Color3.new(1,1,1), "PresentESP")
 end
 
-local presentBindable = Instance.new("BindableFunction")
-presentBindable.OnInvoke = function()
-	task.spawn(function()
-		if not enabled.present then return end
-		if LatestPresent and LatestPresent.Parent then
-			teleportTo(LatestPresent.Position)
-			if autoCollect.present then
-				task.wait(0.3)
-				local m = LatestPresentModel; local attempts = 0
-				repeat
-					pcall(function()
-						local ie = m:FindFirstChild("InteractEvent") or m:FindFirstChildOfClass("RemoteEvent")
-						if ie then ie:FireServer() end
-					end)
-					task.wait(0.1); attempts += 1
-				until not m or not m.Parent or not autoCollect.present or attempts > 100
+function collectPresentIfNeeded()
+	if not autoCollect.present then
+		return
+	end
+	local model = LatestPresentModel
+	if not model or not model.Parent then
+		return
+	end
+	task.wait(0.3)
+	local attempts = 0
+	repeat
+		pcall(function()
+			local remote = model:FindFirstChild("InteractEvent") or model:FindFirstChildOfClass("RemoteEvent")
+			if remote then
+				remote:FireServer()
 			end
-			notify({Title="Teleported!", Content="Arrived at present.", Duration=3})
-		end
-	end)
-	return true
+		end)
+		task.wait(0.1)
+		attempts += 1
+	until not model or not model.Parent or not autoCollect.present or attempts > 100
+end
+
+function teleportToPresentNow(skipEnabledCheck)
+	if not skipEnabledCheck and not enabled.present then
+		notify({Title="Present", Content="Enable Present first.", Duration=2})
+		return false
+	end
+	if LatestPresent and LatestPresent.Parent then
+		teleportTo(LatestPresent.Position)
+		collectPresentIfNeeded()
+		notify({Title="Teleported!", Content="Arrived at present.", Duration=3})
+		return true
+	end
+	notify({Title="Present", Content="No present detected yet.", Duration=3})
+	return false
 end
 
 function onPresentFound(present)
@@ -1824,13 +2237,19 @@ function onPresentFound(present)
 	LatestPresent = part; LatestPresentModel = present
 	updatePresentParagraph()
 	if not enabled.present then return end
+	if autoTeleportState.present and not autoTeleportedPresents[present] then
+		autoTeleportedPresents[present] = true
+		task.spawn(function()
+			teleportToPresentNow(true)
+		end)
+	end
 	if notif.present then
 		showActionDialog({
 			Title = "🎁 Present Found!",
 			Content = "A new present has spawned.",
 			ActionTitle = "Teleport to Present",
 			Callback = function()
-				presentBindable.OnInvoke()
+				teleportToPresentNow(true)
 			end,
 		})
 	end
@@ -1857,13 +2276,13 @@ WindUI = loadCachedRemote(
 local ActualWindow = WindUI:CreateWindow({
 	Title = "Fantastic Frontier Hub",
 	Icon = "compass",
-	Author = "by SeventhBuilder",
+	Author = "by SeventhBuilder • " .. HUB_VERSION,
 	Folder = "FFHub",
 	Size = UDim2.fromOffset(640, 470),
 	MinSize = Vector2.new(580, 360),
 	MaxSize = Vector2.new(920, 640),
 	Theme = "Dark",
-	ToggleKey = Enum.KeyCode.RightShift,
+	ToggleKey = currentToggleKey,
 	Transparent = true,
 	Resizable = true,
 	SideBarWidth = 190,
@@ -1875,6 +2294,11 @@ Window = {
 	_actual = ActualWindow,
 	SetTheme = function(_, theme)
 		pcall(function() WindUI:SetTheme(theme) end)
+	end,
+	SetToggleKey = function(_, keyCode)
+		currentToggleKey = keyCode or currentToggleKey
+		currentToggleKeyName = formatToggleKeyName(currentToggleKey)
+		pcall(function() ActualWindow:SetToggleKey(currentToggleKey) end)
 	end,
 	ShowDialog = function(_, config)
 		return ActualWindow:Dialog(config)
@@ -1894,10 +2318,24 @@ ActualWindow:OnClose(function()
 	end
 	WindUI:Notify({
 		Title = "FF Hub",
-		Content = "Press RightShift to reopen the window.",
+		Content = "Press " .. currentToggleKeyName .. " to reopen the window.",
 		Duration = 5,
 	})
 end)
+
+if #pendingActionDialogs > 0 then
+	task.spawn(function()
+		local queuedDialogs = pendingActionDialogs
+		pendingActionDialogs = {}
+		for _, dialogOpts in ipairs(queuedDialogs) do
+			if not getgenv().scriptRunning then
+				break
+			end
+			showActionDialog(dialogOpts)
+			task.wait(0.1)
+		end
+	end)
+end
 
 
 WorldTab     = createContainerWrapper(ActualWindow:Tab({Title = "World", Icon = "globe"}))
@@ -1910,16 +2348,12 @@ PlayerTab    = createContainerWrapper(ActualWindow:Tab({Title = "Player", Icon =
 ShopsTab     = createContainerWrapper(ActualWindow:Tab({Title = "Shops", Icon = "shopping-cart"}))
 SettingsTab  = createContainerWrapper(ActualWindow:Tab({Title = "Settings", Icon = "settings"}))
 
-plantDropdownOptions = buildPlantOptions()
-animalDropdownOptions, animalLookup = buildEntityOptions(ANIMAL_NAMES, "Animal")
-monsterDropdownOptions, monsterLookup = buildEntityOptions(MONSTER_NPC_NAMES, "Monster")
-collectibleDropdownOptions, collectibleLookup = buildEntityOptions(NIGHTMARE_COLLECTIBLE_NAMES, "Collectible")
-travelerDropdownOptions = buildTravelerOptions()
-entranceDropdownOptions = buildEntranceOptions()
-
-animalOptionLookup = animalLookup
-monsterOptionLookup = monsterLookup
-collectibleOptionLookup = collectibleLookup
+plantDropdownOptions = nil
+animalDropdownOptions = nil
+monsterDropdownOptions = nil
+collectibleDropdownOptions = nil
+travelerDropdownOptions = nil
+entranceDropdownOptions = nil
 yieldUIBuild()
 
 function getThemeOptions()
@@ -1937,7 +2371,7 @@ function getThemeOptions()
 	return themes
 end
 
-notify({Title="FF Hub", Content="Loaded! by SeventhBuilder", Duration=3})
+notify({Title="FF Hub", Content="Loaded " .. HUB_VERSION .. " by SeventhBuilder", Duration=3})
 yieldUIBuild()
 
 connectSignal(ReplicatedStorage.Events.NightBegin.OnClientEvent, function()
@@ -1957,10 +2391,19 @@ pcall(function()
 end)
 
 function findFirstTrackedPlantTarget(entry)
+	local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
 	local foundModel, foundPart = nil, nil
+	local closestDistance = math.huge
 	iterateTrackedPlantInstances(entry, function(model, part)
 		if not foundModel then
 			foundModel, foundPart = model, part
+		end
+		if part then
+			local distance = hrp and (part.Position - hrp.Position).Magnitude or 0
+			if distance < closestDistance then
+				foundModel, foundPart = model, part
+				closestDistance = distance
+			end
 		end
 	end)
 	return foundModel, foundPart
@@ -2021,6 +2464,7 @@ function removeTrackedPlant(optionLabel, keepSelection)
 	plantScanDirty = true
 
 	rebuildPlantSelectionCache()
+	queuePlantRefresh(0.1)
 
 	if not keepSelection then
 		trackerSelections.plants[optionLabel] = nil
@@ -2045,6 +2489,7 @@ function addTrackedPlant(optionLabel)
 		active = true,
 		notify = true,
 		esp = true,
+		autoTeleport = false,
 		autoCollect = false,
 	}
 	trackedPlantEntries[data.key] = entry
@@ -2067,7 +2512,18 @@ function addTrackedPlant(optionLabel)
 		Callback = function(v)
 			entry.esp = v
 			rebuildPlantSelectionCache()
-			if not v then clearTrackedPlantESP(entry) end
+			if not v then
+				clearTrackedPlantESP(entry)
+			else
+				queuePlantRefresh(0.05)
+			end
+		end,
+	})
+	section:CreateToggle({
+		Name = "Auto Teleport",
+		CurrentValue = false,
+		Callback = function(v)
+			entry.autoTeleport = v
 		end,
 	})
 	section:CreateToggle({
@@ -2108,27 +2564,26 @@ function addTrackedPlant(optionLabel)
 			removeTrackedPlant(optionLabel)
 		end,
 	})
-	task.spawn(processTrackedPlants)
+	queuePlantRefresh(0.05)
 	notify({Title="Plant Tracker", Content="Now tracking: " .. data.displayName, Duration=3})
 end
 
 function removeTrackedEntity(selectionKey, lookupTable, storeTable, optionLabel, keepSelection)
 	local data = lookupTable[optionLabel]
 	if not data then return end
-	local entry = storeTable[data.workspaceName]
+	local entry = storeTable[data.key or data.workspaceName]
 	if not entry then return end
 
-	local instance = findEntityInWorkspace(data.workspaceName)
-	if instance then
-		clearTrackedInstanceESP(instance, entry)
+	for _, workspaceName in ipairs(getTrackedWorkspaceNames(entry)) do
+		local instance = findEntityInWorkspace(workspaceName)
+		if instance then
+			clearTrackedInstanceESP(instance, entry)
+		end
 	end
 	if entry.section then
 		entry.section:Destroy()
 	end
-	storeTable[data.workspaceName] = nil
-	if data.workspaceName == "CosmicFloatingMonsterHeadNPC" then enabled.cosmic = false end
-	if data.workspaceName == "PathGamblerNPC" then enabled.gambler = false end
-
+	storeTable[data.key or data.workspaceName] = nil
 	if not trackerSelections[selectionKey] then
 		trackerSelections[selectionKey] = {}
 	end
@@ -2141,23 +2596,22 @@ end
 function addTrackedEntity(selectionKey, tabWrapper, lookupTable, storeTable, optionLabel, entityType)
 	local data = lookupTable[optionLabel]
 	if not data then return end
-	if storeTable[data.workspaceName] then return end
+	if storeTable[data.key or data.workspaceName] then return end
 
 	local entry = {
-		key = data.workspaceName,
+		key = data.key or data.workspaceName,
 		optionLabel = optionLabel,
 		workspaceName = data.workspaceName,
+		workspaceNames = data.workspaceNames,
 		label = data.displayName,
 		active = true,
 		notify = true,
 		esp = true,
+		autoTeleport = false,
 		entityType = entityType,
 		isNight = data.isNight,
 	}
-	storeTable[data.workspaceName] = entry
-
-	if data.workspaceName == "CosmicFloatingMonsterHeadNPC" then enabled.cosmic = true end
-	if data.workspaceName == "PathGamblerNPC" then enabled.gambler = true end
+	storeTable[entry.key] = entry
 
 	local section = tabWrapper:CreateSection("Tracked - " .. data.displayName)
 	entry.section = section
@@ -2173,31 +2627,42 @@ function addTrackedEntity(selectionKey, tabWrapper, lookupTable, storeTable, opt
 		CurrentValue = true,
 		Callback = function(v)
 			entry.esp = v
-			local instance = findEntityInWorkspace(data.workspaceName)
-			if instance then
-				if v then applyTrackedInstanceESP(instance, entry)
-				else clearTrackedInstanceESP(instance, entry) end
+			for _, workspaceName in ipairs(getTrackedWorkspaceNames(entry)) do
+				local instance = findEntityInWorkspace(workspaceName)
+				if instance then
+					if v then applyTrackedInstanceESP(instance, entry)
+					else clearTrackedInstanceESP(instance, entry) end
+				end
 			end
 		end,
 	})
 	section:CreateButton({
 		Name = "Teleport",
 		Callback = function()
-			teleportToTrackedInstance(data.workspaceName, data.displayName)
+			teleportToTrackedInstance(entry, data.displayName)
 		end,
 	})
+	if entityType == "Collectible" then
+		section:CreateToggle({
+			Name = "Auto Teleport",
+			CurrentValue = false,
+			Callback = function(v)
+				entry.autoTeleport = v
+			end,
+		})
+	end
 	if entityType == "Monster" then
 		section:CreateButton({
 			Name = "Bring To Me",
 			Callback = function()
-				bringTrackedInstanceToPlayer(data.workspaceName, data.displayName)
+				bringTrackedInstanceToPlayer(entry, data.displayName)
 			end,
 		})
 	end
 	section:CreateButton({
 		Name = "Check Now",
 		Callback = function()
-			local instance = refreshTrackedInstance(data.workspaceName, entry)
+			local instance = refreshTrackedInstance(entry.key, entry)
 			if instance then
 				notify({Title=data.displayName, Content="Found in this server.", Duration=3})
 			else
@@ -2213,7 +2678,7 @@ function addTrackedEntity(selectionKey, tabWrapper, lookupTable, storeTable, opt
 		end,
 	})
 
-	refreshTrackedInstance(data.workspaceName, entry)
+	refreshTrackedInstance(entry.key, entry)
 	notify({Title=entityType, Content="Now tracking: " .. data.displayName, Duration=3})
 end
 
@@ -2262,15 +2727,32 @@ presentSection:CreateToggle({
 		enabled.present = v
 		updatePresentParagraph()
 		notify({Title="Present", Content=v and "Enabled" or "Disabled", Duration=2})
+		if v and LatestPresent and LatestPresent.Parent and autoTeleportState.present then
+			task.spawn(function()
+				teleportToPresentNow(true)
+			end)
+		end
 		if v and LatestPresent and LatestPresent.Parent and notif.present then
 			showActionDialog({
 				Title = "🎁 Present Ready",
 				Content = "A present is already available.",
 				ActionTitle = "Teleport to Present",
 				Callback = function()
-					presentBindable.OnInvoke()
+					teleportToPresentNow(true)
 				end,
 			})
+		end
+	end,
+})
+presentSection:CreateToggle({
+	Name = "Auto Teleport",
+	CurrentValue = false,
+	Callback = function(v)
+		autoTeleportState.present = v
+		if v and enabled.present and LatestPresent and LatestPresent.Parent then
+			task.spawn(function()
+				teleportToPresentNow(true)
+			end)
 		end
 	end,
 })
@@ -2284,28 +2766,7 @@ presentSection:CreateToggle({
 presentSection:CreateButton({
 	Name = "Teleport to Present",
 	Callback = function()
-		if not enabled.present then
-			notify({Title="Present", Content="Enable Present first.", Duration=2})
-			return
-		end
-		if LatestPresent and LatestPresent.Parent then
-			teleportTo(LatestPresent.Position)
-			if autoCollect.present then
-				task.wait(0.3)
-				local model = LatestPresentModel
-				local attempts = 0
-				repeat
-					pcall(function()
-						local remote = model:FindFirstChild("InteractEvent") or model:FindFirstChildOfClass("RemoteEvent")
-						if remote then remote:FireServer() end
-					end)
-					task.wait(0.1)
-					attempts += 1
-				until not model or not model.Parent or not autoCollect.present or attempts > 100
-			end
-		else
-			notify({Title="Present", Content="No present detected yet.", Duration=3})
-		end
+		teleportToPresentNow()
 	end,
 })
 presentStatusParagraph = presentSection:CreateParagraph({
@@ -2319,7 +2780,7 @@ entrancesSection:CreateLabel("Select multiple entrances. Selecting one again rem
 createTrackerDropdownAsync("entrances", entrancesSection, 0.02, function(section)
 	return section:CreateDropdown({
 		Name = "Entrances to Track",
-		Options = entranceDropdownOptions,
+		Options = getEntranceDropdownOptions(),
 		CurrentOption = {},
 		MultipleOptions = true,
 		SearchEnabled = false,
@@ -2366,7 +2827,7 @@ travelerSection:CreateLabel("Select multiple travelers. Selecting one again remo
 createTrackerDropdownAsync("travelers", travelerSection, 0.05, function(section)
 	return section:CreateDropdown({
 		Name = "Travelers to Track",
-		Options = travelerDropdownOptions,
+		Options = getTravelerDropdownOptions(),
 		CurrentOption = {},
 		MultipleOptions = true,
 		SearchEnabled = true,
@@ -2415,6 +2876,7 @@ performanceSection:CreateButton({Name="Remove All Vegetation", Callback=function
 		Leaves = true,
 		LeafPart = true,
 		WeedPart = true,
+		CropPart = true,
 	}
 	local removed = destroyMatchingWorkspaceInstances(function(obj)
 		return vegetationNames[obj.Name] == true or (obj:IsA("MeshPart") and obj.MeshId == "rbxassetid://511992639")
@@ -2446,18 +2908,20 @@ utilitiesSection:CreateButton({
 yieldUIBuild()
 
 local plantTrackerSection = PlantsTab:CreateSection("Plant Tracker")
-createTrackerDropdownAsync("plants", plantTrackerSection, 0.1, function(section)
-	return section:CreateDropdown({
-		Name = "Plants to Track",
-		Options = plantDropdownOptions,
-		CurrentOption = {},
-		MultipleOptions = true,
-		SearchEnabled = true,
-		Callback = function(opt)
-			syncTrackerSelections("plants", opt, addTrackedPlant, removeTrackedPlant)
-		end,
-	})
-end)
+plantTrackerSection:CreateLabel("Select multiple plants. Selecting one again removes it from tracking.")
+trackerDropdowns.plants = plantTrackerSection:CreateDropdown({
+	Name = "Plants to Track",
+	Options = getPlantDropdownOptions(),
+	CurrentOption = {},
+	MultipleOptions = true,
+	SearchEnabled = true,
+	Callback = function(opt)
+		syncTrackerSelections("plants", opt, addTrackedPlant, removeTrackedPlant)
+	end,
+})
+if #getSelectionValues(trackerSelections.plants) > 0 then
+	setDropdownSelection("plants")
+end
 yieldUIBuild()
 
 local collectiblesSection = PlantsTab:CreateSection("Nightmare Collectibles")
@@ -2465,7 +2929,7 @@ collectiblesSection:CreateLabel("Select multiple collectibles. Selecting one aga
 createTrackerDropdownAsync("collectibles", collectiblesSection, 0.15, function(section)
 	return section:CreateDropdown({
 		Name = "Collectibles to Track",
-		Options = collectibleDropdownOptions,
+		Options = getCollectibleDropdownOptions(),
 		CurrentOption = {},
 		MultipleOptions = true,
 		SearchEnabled = true,
@@ -2485,7 +2949,7 @@ animalsSection:CreateLabel("Select multiple animals. Selecting one again removes
 createTrackerDropdownAsync("animals", animalsSection, 0.2, function(section)
 	return section:CreateDropdown({
 		Name = "Animals to Track",
-		Options = animalDropdownOptions,
+		Options = getAnimalDropdownOptions(),
 		CurrentOption = {},
 		MultipleOptions = true,
 		SearchEnabled = true,
@@ -2505,7 +2969,7 @@ monstersSection:CreateLabel("Select multiple monsters. Selecting one again remov
 createTrackerDropdownAsync("monsters", monstersSection, 0.25, function(section)
 	return section:CreateDropdown({
 		Name = "Monsters to Track",
-		Options = monsterDropdownOptions,
+		Options = getMonsterDropdownOptions(),
 		CurrentOption = {},
 		MultipleOptions = true,
 		SearchEnabled = true,
@@ -2682,6 +3146,20 @@ end})
 PlayerTab:CreateToggle({Name="Fly", CurrentValue=false, Flag="Fly", Callback=function(v)
 	if v then NOFLY(); task.wait(); sFLY() else NOFLY() end
 end})
+yieldUIBuild()
+
+local playerESPSection = PlayerTab:CreateSection("Players")
+playerESPSection:CreateToggle({Name="Players ESP", CurrentValue=espToggles.players, Flag="PlayersESP",
+	Callback=function(v)
+		espToggles.players = v
+		if not v then
+			clearPlayersESP()
+		else
+			refreshPlayersESP()
+		end
+		notify({Title="Players ESP", Content=v and "Enabled" or "Disabled", Duration=2})
+	end})
+playerESPSection:CreateLabel("Shows player name and current health.")
 yieldUIBuild()
 
 PlayerTab:CreateSection("🛠 Tools")
@@ -2991,8 +3469,6 @@ getgenv().FFHubUnload = cleanupHub
 
 SettingsTab:CreateSection("🔔 Notifications")
 SettingsTab:CreateToggle({Name="Present Notifications",    CurrentValue=notif.present,    Flag="NotifPresent",    Callback=function(v) notif.present=v end})
-SettingsTab:CreateToggle({Name="Cosmic Ghost Notifications",CurrentValue=notif.cosmic,    Flag="NotifCosmic",    Callback=function(v) notif.cosmic=v end})
-SettingsTab:CreateToggle({Name="Path Gambler Notifications",CurrentValue=notif.gambler,   Flag="NotifGambler",   Callback=function(v) notif.gambler=v end})
 SettingsTab:CreateToggle({Name="Firefly Notifications",    CurrentValue=notif.firefly,    Flag="NotifFirefly",    Callback=function(v) notif.firefly=v end})
 SettingsTab:CreateToggle({Name="Bird Nest Notifications",  CurrentValue=notif.birdnest,   Flag="NotifBird",       Callback=function(v) notif.birdnest=v end})
 SettingsTab:CreateToggle({Name="Strangeman Notifications", CurrentValue=notif.strangeman, Flag="NotifStrangeman", Callback=function(v) notif.strangeman=v end})
@@ -3019,18 +3495,10 @@ SettingsTab:CreateToggle({Name="Plant ESP", CurrentValue=espToggles.plants, Flag
 			for _, entry in pairs(trackedPlantEntries) do
 				clearTrackedPlantESP(entry)
 			end
+		else
+			queuePlantRefresh(0.05)
 		end
 		notify({Title="Plant ESP", Content=v and "Enabled" or "Disabled", Duration=2})
-	end})
-SettingsTab:CreateToggle({Name="Players ESP", CurrentValue=espToggles.players, Flag="PlayersESP",
-	Callback=function(v)
-		espToggles.players = v
-		if not v then
-			clearPlayersESP()
-		else
-			refreshPlayersESP()
-		end
-		notify({Title="Players ESP", Content=v and "Enabled" or "Disabled", Duration=2})
 	end})
 
 for entranceIndex, ev in ipairs(ENTRANCES) do
@@ -3052,7 +3520,20 @@ end
 yieldUIBuild()
 
 SettingsTab:CreateSection("Theme")
-SettingsTab:CreateLabel("Window toggle key: RightShift")
+SettingsTab:CreateLabel("Version: " .. HUB_VERSION)
+local keybindLabel = SettingsTab:CreateLabel("Window toggle key: " .. currentToggleKeyName)
+SettingsTab:CreateDropdown({Name="Window Keybind", SearchEnabled=true,
+	Options={"RightShift","LeftShift","RightControl","LeftControl","Insert","Home","End","PageUp","PageDown","Backquote","Delete","F1","F2","F3","F4","F5","F6","F7","F8","F9","F10","F11","F12"},
+	CurrentOption={currentToggleKeyName},
+	Callback=function(opt)
+		local keyName = opt[1]
+		local keyCode = keyName and Enum.KeyCode[keyName]
+		if keyCode then
+			Window:SetToggleKey(keyCode)
+			updateParagraph(keybindLabel, "Window toggle key: " .. currentToggleKeyName, "")
+			notify({Title="UI Keybind", Content="Window keybind set to " .. currentToggleKeyName, Duration=3})
+		end
+	end})
 SettingsTab:CreateDropdown({Name="Theme", SearchEnabled=true,
 	Options=getThemeOptions(),
 	CurrentOption={WindUI:GetCurrentTheme() or "Dark"}, Flag="Theme",
@@ -3189,17 +3670,31 @@ end)
 
 task.spawn(function()
 	while getgenv().scriptRunning do
-		task.wait(1.5)
-		processTrackedPlants()
-		refreshPlayersESP()
+		task.wait(2)
+		if next(trackedPlantEntries) ~= nil then
+			processTrackedPlants()
+		end
+		if espToggles.players then
+			refreshPlayersESP()
+		end
+		local entityRefreshCount = 0
 		for name, entry in pairs(entityWatchList) do
 			if entry.active then
 				refreshTrackedInstance(name, entry)
+				entityRefreshCount += 1
+				if entityRefreshCount % 3 == 0 then
+					task.wait()
+				end
 			end
 		end
+		local travelerRefreshCount = 0
 		for name, entry in pairs(travelerWatchList) do
 			if entry.active then
 				refreshTrackedInstance(name, entry)
+				travelerRefreshCount += 1
+				if travelerRefreshCount % 3 == 0 then
+					task.wait()
+				end
 			end
 		end
 	end
@@ -3215,10 +3710,12 @@ end)
 
 -- Initial checks on load
 task.spawn(function()
-	task.wait(3)
+	task.wait(2)
 	onNightBeginEntrances()
 	updatePresentParagraph()
-	processTrackedPlants()
+	if next(trackedPlantEntries) ~= nil then
+		processTrackedPlants()
+	end
 	for name, entry in pairs(entityWatchList) do
 		if entry.active then
 			refreshTrackedInstance(name, entry)

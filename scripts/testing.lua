@@ -33,7 +33,7 @@ Mouse  = player:GetMouse()
 -- =====================================================================
 local WindUI
 local Window
-local HUB_VERSION = "v11.5"
+local HUB_VERSION = "v11.4.5"
 
 local walkspeed = 18; local jumppower = 81.5; local gravity = Workspace.Gravity
 local sangle = 56; local flyspeed = 1; local iyflyspeed = 1
@@ -741,7 +741,7 @@ function iterateTrackedPlantInstances(entry, callback)
 		local spawner = spawnersFolder:FindFirstChild("The Sprutle Frog Expansion_Updated")
 		local frogSpawner = spawner and spawner:FindFirstChild("Spawner_GratefulFrogs")
 		local collectible = frogSpawner and frogSpawner:FindFirstChild("Collectible")
-		local part = collectible and collectible:FindFirstChildWhichIsA("BasePart", true)
+		local part = collectible and collectible:FindFirstChildWhichIsA("BasePart")
 		if collectible then
 			callback(collectible, part)
 		end
@@ -812,7 +812,6 @@ function autoTeleportTrackedTarget(entry, instance, part)
 end
 
 function processTrackedPlants()
-	clearPlantESPVisuals()
 	for _, entry in pairs(trackedPlantEntries) do
 		if entry.active then
 			local count = 0
@@ -820,22 +819,13 @@ function processTrackedPlants()
 			iterateTrackedPlantInstances(entry, function(model, part)
 				count += 1
 				if entry.esp and espToggles.plants then
-					if model and (model:IsA("Model") or model:IsA("BasePart")) then
-						addHighlightESP(model, ENTITY_COLORS.Plant, Color3.new(1, 1, 1), tag)
-					elseif part then
-						addHighlightESP(part, ENTITY_COLORS.Plant, Color3.new(1, 1, 1), tag)
-					end
+					addHighlightESP(model, ENTITY_COLORS.Plant, Color3.new(1, 1, 1), tag)
 					if part then
-						addPlantAdornment(part, entry, entry.label)
 						addBillboardESP(part, entry.label, ENTITY_COLORS.Plant, tag)
 						addTracerESP(part, ENTITY_COLORS.Plant, tag)
 					end
 				else
-					if model and (model:IsA("Model") or model:IsA("BasePart")) then
-						removeESP(model, tag)
-					elseif part then
-						removeESP(part, tag)
-					end
+					removeESP(model, tag)
 				end
 				notifyTrackedPlant(entry, model, part)
 				autoTeleportTrackedTarget(entry, model, part)
@@ -963,7 +953,6 @@ local MONSTER_NPC_NAMES = {
 	"DarkRedOgreNPC","YellowOgreNPC","ClownBuggyNPC","CircusNPC","EggCrocNPC","RedmanNPC","MaroonAntNPC",
 	"FirstKnightNPC","GreenPirateNPC","RedFloatingMonsterHeadNPC","CosmicFloatingMonsterHeadNPC",
 }
-
 local PLANT_TRACK_NAMES = {
 	"Lakethistle","Rozier Flower","Lemon Flower","Pearl Flower","Plumbo Flower","Strangeman Flower",
 	"Clamstack","SandCoral","Shell","Strangeman Shell","Falichen","Hungry Flower","Abandoned Flower",
@@ -987,13 +976,16 @@ local DISPLAY_NAME_OVERRIDES = {
 	DarkFloatingHeadNPC = "Dark Ghost",
 	RedFloatingMonsterHeadNPC = "Plasma Ghost",
 	CosmicFloatingMonsterHeadNPC = "Cosmic Ghost",
-	PathGamblerNPC = "Path Gambler",
 	BanditSpiderNPC = "Spider Boss",
 	NPC_Deer = "Deer",
 	RabbitNPC = "Rabbit",
-	GhostBat = "Ghost Bat",
 	MonsterBird = "Monster Bird",
 	BigBeakedPotatoBird = "Big Beaked Potato Bird",
+	GratefulFrogs = "Grateful Frog",
+	
+	PathGamblerNPC = "Path Gambler",
+	GhostBat = "Ghost Bat",
+	
 	NPC_Strangeman = "Strangeman",
 	NPC_ToasterJosh = "Toaster Josh",
 	NPC_Stick = "Stick",
@@ -1002,7 +994,6 @@ local DISPLAY_NAME_OVERRIDES = {
 	NPC_GreenGolem = "Green Golem",
 	NPC_Construct = "Construct",
 	NPC_Giver = "Interdimensional Traveler",
-	GratefulFrogs = "Grateful Frog",
 }
 
 local ENTITY_COLORS = {
@@ -1300,100 +1291,12 @@ function buildShopItemOptions()
 	return labels
 end
 
-local function addPlantAdornment(part, entry, labelText)
-    if not part or not part:IsA("BasePart") then
-        return
-    end
-
-    local boxName = "PlantBoxHandleAdornment"
-    local beamName = "PlantBeam"
-    local attachment0Name = "PlantBeamAttachment0"
-    local attachment1Name = "PlantBeamAttachment1"
-    local billboardName = "PlantBillboard"
-
-    local box = part:FindFirstChild(boxName)
-    if not box then
-        box = Instance.new("BoxHandleAdornment")
-        box.Name = boxName
-        box.AdornCullingMode = Enum.AdornCullingMode.Never
-        box.AlwaysOnTop = true
-        box.ZIndex = 10
-        box.Transparency = 0.55
-        box.Size = part.Size + Vector3.new(0.18, 0.18, 0.18)
-        box.Parent = part
-    end
-    box.Adornee = part
-    box.Color3 = (entry and entry.color) or Color3.fromRGB(121, 255, 134)
-
-    local billboard = part:FindFirstChild(billboardName)
-    if not billboard then
-        billboard = Instance.new("BillboardGui")
-        billboard.Name = billboardName
-        billboard.AlwaysOnTop = true
-        billboard.Size = UDim2.new(0, 220, 0, 52)
-        billboard.StudsOffset = Vector3.new(0, 2.6, 0)
-        billboard.MaxDistance = 10000
-        billboard.Parent = part
-
-        local label = Instance.new("TextLabel")
-        label.Name = "Label"
-        label.BackgroundTransparency = 1
-        label.Size = UDim2.fromScale(1, 1)
-        label.Font = Enum.Font.GothamBold
-        label.TextScaled = true
-        label.TextStrokeTransparency = 0
-        label.TextColor3 = Color3.fromRGB(255, 255, 255)
-        label.Parent = billboard
-    end
-    billboard.Adornee = part
-    local label = billboard:FindFirstChild("Label")
-    if label and label:IsA("TextLabel") then
-        label.Text = labelText or (entry and entry.displayName) or part.Name
-    end
-
-    local rootPart = getCharacterRootPart()
-    if not rootPart then
-        return
-    end
-
-    local attachment0 = rootPart:FindFirstChild(attachment0Name)
-    if not attachment0 then
-        attachment0 = Instance.new("Attachment")
-        attachment0.Name = attachment0Name
-        attachment0.Parent = rootPart
-    end
-
-    local attachment1 = part:FindFirstChild(attachment1Name)
-    if not attachment1 then
-        attachment1 = Instance.new("Attachment")
-        attachment1.Name = attachment1Name
-        attachment1.Parent = part
-    end
-
-    local beam = part:FindFirstChild(beamName)
-    if not beam then
-        beam = Instance.new("Beam")
-        beam.Name = beamName
-        beam.AlwaysOnTop = true
-        beam.Attachment1 = attachment1
-        beam.Width0 = 0.08
-        beam.Width1 = 0.08
-        beam.FaceCamera = true
-        beam.Parent = part
-    end
-    beam.Attachment0 = attachment0
-    beam.Attachment1 = attachment1
-    beam.Color = ColorSequence.new((entry and entry.color) or Color3.fromRGB(121, 255, 134))
-    beam.Enabled = true
-end
-
 function clearPlantESPVisuals()
 	for _, obj in ipairs(spawnersFolder:GetDescendants()) do
 		if obj.Name == "PlantBoxHandleAdornment"
 			or obj.Name == "PlantBeam"
 			or obj.Name == "PlantBeamAttachment0"
 			or obj.Name == "PlantBeamAttachment1"
-			or obj.Name == "PlantBillboard"
 			or string.find(obj.Name, "^TrackedPlant_")
 			or string.find(obj.Name, "_Beam$")
 			or string.find(obj.Name, "_A1$")
@@ -1404,9 +1307,7 @@ function clearPlantESPVisuals()
 	local character = player.Character
 	if character then
 		for _, obj in ipairs(character:GetDescendants()) do
-			if obj.Name == "PlantBeamAttachment0"
-				or string.find(obj.Name, "_A0$")
-				or string.find(obj.Name, "_Beam$") then
+			if string.find(obj.Name, "_A0$") or string.find(obj.Name, "_Beam$") then
 				obj:Destroy()
 			end
 		end
@@ -1431,49 +1332,22 @@ function getPlantESPTag(entry)
 end
 
 function resolveTrackedPlantTarget(instance)
-	if not instance then
-		return nil, nil
+	if not instance then return nil, nil end
+	local model = instance
+	if not instance:IsA("Model") and not instance:IsA("Folder") then
+		model = instance:FindFirstAncestorOfClass("Model") or instance.Parent or instance
 	end
-
-	local target = instance
-
-	if target.Name == "Info" and target.Parent then
-		target = target.Parent
+	local part
+	if model and model.FindFirstChild then
+		local collectible = model:FindFirstChild("Collectible")
+		part = model:FindFirstChild("HitBox")
+			or (collectible and collectible:FindFirstChildWhichIsA("BasePart", true))
+			or model:FindFirstChildWhichIsA("BasePart", true)
 	end
-
-	if target.Name == "Collectible" and target.Parent and target.Parent ~= spawnersFolder then
-		local parentTarget = target.Parent
-		if parentTarget:IsA("Model") or parentTarget:IsA("Folder") then
-			target = parentTarget
-		end
+	if not part and instance:IsA("BasePart") then
+		part = instance
 	end
-
-	local part = nil
-	if target:IsA("BasePart") then
-		part = target
-	else
-		part = target:FindFirstChild("HitBox", true)
-		if not part then
-			local collectible = target:FindFirstChild("Collectible", true)
-			part = collectible and collectible:FindFirstChildWhichIsA("BasePart", true)
-		end
-		if not part and instance ~= target and instance:IsA("BasePart") then
-			part = instance
-		end
-		if not part and instance ~= target then
-			part = instance:FindFirstChildWhichIsA("BasePart", true)
-		end
-		if not part then
-			part = target:FindFirstChildWhichIsA("BasePart", true)
-		end
-	end
-
-	local adornTarget = target
-	if not (adornTarget:IsA("Model") or adornTarget:IsA("BasePart")) then
-		adornTarget = part
-	end
-
-	return adornTarget, part
+	return model or instance, part
 end
 
 function getTrackedPlantEntryByName(nameKey, exactLookup, activeEntries)
@@ -1500,9 +1374,7 @@ function getTrackedPlantEntryByItemValue(itemValue, activeEntries)
 	if not itemId then
 		return nil, nil
 	end
-	if not itemInfoById or next(itemInfoById) == nil then
-		buildItemInfoEntries()
-	end
+	buildItemInfoEntries()
 	local itemInfo = itemInfoById[itemId]
 	local fullName = itemInfo and itemInfo.displayName
 	if not fullName or fullName == "" then
@@ -1539,7 +1411,6 @@ function scanTrackedPlantInstances()
 	local foundByKey = {}
 	local activeEntries = {}
 	local exactLookup = {}
-	buildItemInfoEntries()
 	for key, entry in pairs(trackedPlantEntries) do
 		if entry.active and entry.workspaceName and not entry.special then
 			activeEntries[key] = entry
@@ -2643,32 +2514,9 @@ end
 function clearTrackedPlantESP(entry)
 	if not entry then return end
 	local tag = getPlantESPTag(entry)
-	iterateTrackedPlantInstances(entry, function(model, part)
-		if model and (model:IsA("Model") or model:IsA("BasePart")) then
-			removeESP(model, tag)
-		end
-		if part then
-			removeESP(part, tag)
-			for _, childName in ipairs({
-				"PlantBoxHandleAdornment",
-				"PlantBeam",
-				"PlantBeamAttachment1",
-				"PlantBillboard",
-			}) do
-				local child = part:FindFirstChild(childName)
-				if child then
-					child:Destroy()
-				end
-			end
-		end
+	iterateTrackedPlantInstances(entry, function(model)
+		removeESP(model, tag)
 	end)
-	local rootPart = getCharacterRootPart()
-	if rootPart then
-		local attachment = rootPart:FindFirstChild("PlantBeamAttachment0")
-		if attachment then
-			attachment:Destroy()
-		end
-	end
 end
 
 function removeTrackedPlant(optionLabel, keepSelection)
@@ -2709,7 +2557,6 @@ function addTrackedPlant(optionLabel)
 		label = data.displayName,
 		displayName = data.displayName,
 		entityType = "Plant",
-		color = ENTITY_COLORS.Plant,
 		special = data.special,
 		active = true,
 		notify = true,
@@ -3952,4 +3799,3 @@ task.spawn(function()
 		end
 	end
 end)
-
